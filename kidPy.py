@@ -581,9 +581,6 @@ def plot_opt(ri):
 
 def main():
     s = None
-    upload_status = 0
-    name = ''
-    build_time = ''
     try:
         fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
     except RuntimeError:
