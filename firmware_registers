@@ -1,0 +1,55 @@
+var_name_in_kidpy reg_name_in_firmware
+
+udp_start_reg GbE_tx_rst
+udp_destip_reg GbE_tx_destip
+udp_destport_reg GbE_tx_destport
+pps_start_reg GbE_pps_start
+
+fft_shift_reg PFB_fft_shift
+dds_shift_reg dds_shift
+fir_prefix_reg FIR_h
+bins_reg bins
+load_bins_reg load_bins
+
+read_comb_len_reg read_comb_len
+write_comb_len_reg write_comb_len
+
+accum_len_reg downsamp_sync_accum_len
+accum_reset_reg downsamp_sync_accum_reset
+
+read_qdr_status_reg read_qdrcal_status
+write_qdr_status_reg write_qdrcal_status
+
+read_stream_status_reg read_stream_status
+write_stream_status_reg write_stream_status
+
+start_dac_reg start_dac
+dac_reset_reg dac_reset
+
+qdr0_reg qdr0_memory
+qdr1_reg qdr1_memory
+
+fft_snap_ctrl_reg fft_snap_fft_snap_ctrl
+fft_snap_bram_reg fft_snap_fft_snap_bram
+
+accum_snap_ctrl_reg accum_snap_accum_snap_ctrl
+accum_snap_bram_reg accum_snap_accum_snap_bram
+
+adc_snap_ctrl_reg adc_snap_adc_snap_ctrl 
+adc_snap_bram_reg adc_snap_adc_snap_bram
+adc_snap_trig_reg adc_snap_adc_snap_trig
+
+DDC_chan_sel_reg DDC_snap_chan_select
+
+DDC_fftbin_ctrl_reg DDC_snap_rawfftbin_ctrl
+DDC_fftbin_trig_reg DDC_snap_rawfftbin_trig
+DDC_fftbin_bram_reg DDC_snap_rawfftbin_bram
+
+DDC_mixerout_ctrl_reg DDC_snap_mixerout_ctrl
+DDC_mixerout_trig_reg DDC_snap_mixerout_trig
+DDC_mixerout_bram_reg DDC_snap_mixerout_bram
+
+fir_snap_ctrl_reg fir_snap_lpf_ctrl
+fir_snap_trig_reg fir_snap_lpf_trig
+fir_snap_bram_reg fir_snap_lpf_bram
+
