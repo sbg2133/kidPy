@@ -9,7 +9,7 @@ from gbeConfig import roachDownlink
 import time
 import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
-from scipy import signal
+from scipy import signal, ndimage, fftpack
 plt.ion()
 
 # load general settings
@@ -32,9 +32,15 @@ header_len = int(network[np.where(network == 'header_len')[0][0]][1])
 CLOCK = 1
 LO = 2
 
+lo_step = np.float(gc[np.where(gc == 'lo_step')[0][0]][1])
 center_freq = np.float(gc[np.where(gc == 'center_freq')[0][0]][1])
 test_freq = np.float(gc[np.where(gc == 'test_freq')[0][0]][1])
 test_freq = np.array([test_freq])
+
+# parameters for freq search
+smoothing_scale = np.float(gc[np.where(gc == 'smoothing_scale')[0][0]][1])
+peak_threshold = np.float(gc[np.where(gc == 'peak_threshold')[0][0]][1])
+spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
 
 def testConn(fpga):
     if not fpga:
@@ -136,8 +142,8 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 50):
     span = ri.pos_delta
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
-    sweep_freqs = np.arange(start, stop, ri.lo_step)
-    sweep_freqs = np.round(sweep_freqs/ri.lo_step)*ri.lo_step
+    sweep_freqs = np.arange(start, stop, lo_step)
+    sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
     if write:
         ri.makeFreqComb()
         ri.writeQDR(ri.freq_comb)
@@ -156,7 +162,6 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 50):
 	time.sleep(0.1)
     valon.set_frequency(LO, center_freq) # LO
     return 
-
 
 def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
     # span = Hz 
@@ -180,8 +185,8 @@ def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
     print "RF tones =", upconvert
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
-    sweep_freqs = np.arange(start, stop, ri.lo_step)
-    sweep_freqs = np.round(sweep_freqs/ri.lo_step)*ri.lo_step
+    sweep_freqs = np.arange(start, stop, lo_step)
+    sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
     np.save(sweep_dir + '/bb_freqs.npy', bb_target_freqs)
     np.save(sweep_dir + '/sweep_freqs.npy',sweep_freqs)
     if write:
@@ -300,13 +305,136 @@ def plotPhasePSD(chan, udp, ri, time_interval):
     f, Spp = signal.welch(phases, ri.accum_freq, nperseg=len(phases)/2)
     #f, Spp = signal.periodogram(phases, fs = 488.28125)
     #f, Spp = sean_psd(phases, 1/self.accum_freq)
-    Spp = 10*np.log10(Spp[1:]) 
+    Spp = 10*np.log10(Spp[1:])
     print "MIN =", np.min(Spp), "dBc/Hz"
     print "MAX =", np.max(Spp), "dBc/Hz"
     ax.set_ylim((np.min(Spp) - 10, np.max(Spp) + 10))
     ax.plot(f[1:], Spp, linewidth = 1, label = 'chan ' + str(chan), alpha = 0.7)
     plt.legend(loc = 'upper right')
     plt.grid()
+    return
+
+def filter_trace(path, bb_freqs, sweep_freqs):
+    chan_I, chan_Q = openStoredSweep(path)
+    channels = np.arange(np.shape(chan_I)[1])
+    mag = np.zeros((len(bb_freqs),len(sweep_freqs)))
+    chan_freqs = np.zeros((len(bb_freqs),len(sweep_freqs)))
+    for chan in channels:
+    	mag[chan] = (np.sqrt(chan_I[:,chan]**2 + chan_Q[:,chan]**2))
+    	chan_freqs[chan] = (sweep_freqs + bb_freqs[chan])/1.0e6
+    mag = np.concatenate((mag[len(mag)/2:], mag[:len(mag)/2]))
+    mags = np.hstack(mag)
+    mags = 20*np.log10(mags/np.max(mags))
+    chan_freqs = np.hstack(chan_freqs)
+    chan_freqs = np.concatenate((chan_freqs[len(chan_freqs)/2:],chan_freqs[:len(chan_freqs)/2]))
+    return chan_freqs, mags
+
+def lowpass_cosine(y, tau, f_3db, width, padd_data=True):
+    # padd_data = True means we are going to symmetric copies of the data to the start and stop
+    # to reduce/eliminate the discontinuities at the start and stop of a dataset due to filtering
+    #
+    # False means we're going to have transients at the start and stop of the data
+    # kill the last data point if y has an odd length
+    if np.mod(len(y),2):
+    	y = y[0:-1]
+    # add the weird padd
+    # so, make a backwards copy of the data, then the data, then another backwards copy of the data
+    if padd_data:
+    	y = np.append( np.append(np.flipud(y),y) , np.flipud(y) )
+    # take the FFT
+    ffty = fftpack.fft(y)
+    ffty = fftpack.fftshift(ffty)
+    # make the companion frequency array
+    delta = 1.0/(len(y)*tau)
+    nyquist = 1.0/(2.0*tau)
+    freq = np.arange(-nyquist,nyquist,delta)
+    # turn this into a positive frequency array
+    pos_freq = freq[(len(ffty)/2):]
+    # make the transfer function for the first half of the data
+    i_f_3db = min( np.where(pos_freq >= f_3db)[0] )
+    f_min = f_3db - (width/2.0)
+    i_f_min = min( np.where(pos_freq >= f_min)[0] )
+    f_max = f_3db + (width/2);
+    i_f_max = min( np.where(pos_freq >= f_max)[0] )
+    transfer_function = np.zeros(len(y)/2)
+    transfer_function[0:i_f_min] = 1
+    transfer_function[i_f_min:i_f_max] = (1 + np.sin(-np.pi * ((freq[i_f_min:i_f_max] - freq[i_f_3db])/width)))/2.0
+    transfer_function[i_f_max:(len(freq)/2)] = 0
+    # symmetrize this to be [0 0 0 ... .8 .9 1 1 1 1 1 1 1 1 .9 .8 ... 0 0 0] to match the FFT
+    transfer_function = np.append(np.flipud(transfer_function),transfer_function)
+    # apply the filter, undo the fft shift, and invert the fft
+    filtered=np.real(fftpack.ifft(fftpack.ifftshift(ffty*transfer_function)))
+    # remove the padd, if we applied it
+    if padd_data:
+    	filtered = filtered[(len(y)/3):(2*(len(y)/3))]
+    # return the filtered data
+    return filtered
+
+def findFreqs(path, plot = False):
+    bb_freqs = np.load(path + '/bb_freqs.npy')
+    sweep_freqs = np.load(path + '/sweep_freqs.npy')
+    chan_freqs, mags = filter_trace(path, bb_freqs, sweep_freqs)
+    chan_freqs *= 1.0e6
+    filtermags = lowpass_cosine(mags, lo_step, 1./smoothing_scale, 0.1 * (1.0/smoothing_scale))
+    ilo = np.where((mags-filtermags) < -1.0*peak_threshold)[0]
+    iup = np.where( (mags-filtermags) > -1.0*peak_threshold)[0]
+    new_mags = mags - filtermags
+    new_mags[iup] = 0
+    labeled_image, num_objects = ndimage.label(new_mags)
+    indices = ndimage.measurements.minimum_position(new_mags,labeled_image,np.arange(num_objects)+1)
+    kid_idx = np.array(indices, dtype = 'int')
+
+    del_idx = []
+    for i in range(len(kid_idx) - 1):
+        spacing = (chan_freqs[kid_idx[i + 1]] - chan_freqs[kid_idx[i]])
+        if (spacing < spacing_threshold):
+            print spacing, spacing_threshold
+            if (new_mags[kid_idx[i + 1]] < new_mags[kid_idx[i]]):
+                del_idx.append(i)
+            else:
+                del_idx.append(i + 1)
+
+    del_idx = np.array(del_idx)
+    kid_idx = np.delete(kid_idx, del_idx)
+
+    del_again = []
+    for i in range(len(kid_idx) - 1):
+        spacing = (chan_freqs[kid_idx[i + 1]] - chan_freqs[kid_idx[i]])
+        if (spacing < spacing_threshold):
+            if (new_mags[kid_idx[i + 1]] < new_mags[kid_idx[i]]):
+                del_again.append(i)
+            else:
+                del_again.append(i + 1)
+
+    del_again = np.array(del_again)
+    kid_idx = np.delete(kid_idx, del_again)
+    # list of kid frequencies
+    rf_target_freqs = np.array(chan_freqs[kid_idx])
+    bb_target_freqs = ((rf_target_freqs*1.0e6) - center_freq)
+
+    if len(bb_target_freqs) > 0:
+    	bb_target_freqs = np.roll(bb_target_freqs, - np.argmin(np.abs(bb_target_freqs)) - 1)
+    	np.save(path + '/last_bb_targ_freqs.npy', bb_target_freqs)
+    	print len(rf_target_freqs), "KIDs found:\n"
+        print rf_target_freqs
+    else:
+        print "No freqs found..."
+
+    if plot:
+        plt.figure(1)
+        plt.plot(chan_freqs, mags,'b', label = 'no filter')
+        plt.plot(chan_freqs, filtermags,'g', label = 'filtered')
+        plt.xlabel('frequency (MHz)')
+        plt.ylabel('dB')
+        plt.legend()
+        plt.figure(2)
+        plt.plot(chan_freqs, mags - filtermags, 'b')
+        plt.plot(chan_freqs[ilo],mags[ilo]-filtermags[ilo],'r*')
+        plt.figure(4)
+        plt.plot(chan_freqs, mags, 'b')
+        plt.plot(chan_freqs[kid_idx], mags[kid_idx], 'r*')
+        plt.xlabel('frequency (MHz)')
+        plt.ylabel('dB')
     return
 
 def menu(captions, options):
@@ -316,7 +444,7 @@ def menu(captions, options):
             print '\t' +  '\033[32m' + str(i) + ' ..... ' '\033[0m' +  options[i] + '\n'
     print '\t' + captions[1] + '\n'
     for i in range(len(options)):
-        if (i >= 9):
+	if (i >= 9):
             print '\t' +  '\033[32m' + str(i) + ' ..... ' '\033[0m' +  options[i] + '\n'
     opt = input()
     return opt
@@ -330,7 +458,8 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
         if not upload_status:
             print '\n\t\033[93mNo firmware onboard. If ROACH link is up, try upload option\033[93m'
         else:
-            print '\n\t\033[92mFirmware: \033[92m' + ' ' + name + ' ' + build_time
+            #print '\n\t\033[92mFirmware: \033[92m' + ' ' + name + ' ' + build_time
+            print '\n\t\033[92mFirmware:[92m' + firmware_file
         opt = menu(captions,main_opts)
         if opt == 0:
 	    result = testConn(fpga)
@@ -380,7 +509,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	        print "\nROACH link is down"
 		break
             try:
-	        prompt = raw_input('Full test comb (N = 1000) ? y/n) ')
+	        prompt = raw_input('Full test comb? y/n ')
                 if prompt == 'y':
                     ri.makeFreqComb()
 		    setAtten(30, 20)
@@ -496,12 +625,8 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                     pass
             plotVNASweep(str(np.load("last_vna_dir.npy")))
         if opt == 11:
-	    if not fpga:
-	        print "\nROACH link is down"
-		break
-            path = ""
             try:
-	        fk.main(path)
+	        findFreqs(str(np.load("last_vna_dir.npy")), plot = True)
             except KeyboardInterrupt:
 	        pass
         if opt == 12:
@@ -582,10 +707,10 @@ def plot_opt(ri):
 def main():
     s = None
     try:
-        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
-    except RuntimeError:
+        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 1.)
+    except (RuntimeError, AttributeError):
         fpga = None
-    
+
     # UDP socket
     s = socket(AF_PACKET, SOCK_RAW, htons(3))
 
@@ -601,7 +726,7 @@ def main():
     # GbE interface
     udp = roachDownlink(fpga, regs, network, s, ri.accum_freq)
     udp.configSocket()
-    
+
     os.system('clear')
     while 1:
         try:
@@ -610,9 +735,9 @@ def main():
             build_time = ''
 	    if fpga:
 	        if fpga.is_running():
-                    firmware_info = fpga.get_config_file_info()
-                    name = firmware_info['name']
-                    build_time = firmware_info['build_time']
+                    #firmware_info = fpga.get_config_file_info()
+                    #name = firmware_info['name']
+                    #build_time = firmware_info['build_time']
                     upload_status = 1
             time.sleep(0.1)
 	    upload_status = main_opt(fpga, ri, udp, valon, upload_status, name, build_time)

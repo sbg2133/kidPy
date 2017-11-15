@@ -4,6 +4,7 @@ import socket as sock
 import time
 import struct
 import select
+import errno
 import pygetdata as gd
 
 class roachDownlink(object):
@@ -22,10 +23,16 @@ class roachDownlink(object):
 	self.udp_dest_ip = struct.unpack(">L", temp_ip)[0]
 
     def configSocket(self):
-	self.s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, self.buf_size)
-	self.s.bind((self.network[np.where(self.network == 'udp_dest_device')[0][0]][1], 3))
+        try:
+	    self.s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, self.buf_size)
+	    self.s.bind((self.network[np.where(self.network == 'udp_dest_device')[0][0]][1], 3))
+	except sock.error, v:
+            errorcode = v[0]
+            if errorcode == 19:
+	        print "Ethernet device could not be found"
+                pass
         return
-    
+
     def configDownlink(self):
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destip_reg')[0][0]][1], self.udp_dest_ip)
 	time.sleep(0.1)

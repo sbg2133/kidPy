@@ -51,7 +51,6 @@ class roachInterface(object):
 	self.symm_offset = np.float(self.gc[np.where(self.gc == 'symm_offset')[0][0]][1])
 	pos_freqs, self.pos_delta = np.linspace(self.min_pos_freq, self.max_pos_freq, self.Nfreq/2, retstep = True)
 	self.center_freq = np.float(self.gc[np.where(self.gc == 'center_freq')[0][0]][1]) 
-        self.lo_step = 2.0e3
 	self.dac_samp_freq = 512.0e6
         self.fpga_samp_freq = 256.0e6
 	self.bin_fs = 500.0e3 # FFT bin sampling freq
