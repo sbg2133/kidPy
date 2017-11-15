@@ -129,7 +129,7 @@ def calibrateADC(target_rms_mv, outAtten, inAtten):
 caption1 = '\n\t\033[95mKID-PY ROACH2 Readout\033[95m'
 caption2 = '\n\t\033[94mThese functions require UDP streaming to be active\033[94m'
 captions = [caption1, caption2]
-main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate resonances','Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan (phase)','Exit'] 
+main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate freqs from VNA sweep','Write found freqs', 'Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan (phase)','Exit'] 
 
 def vnaSweep(ri, udp, valon, write = False, Navg = 50):
     if not os.path.exists(vna_savepath):
@@ -633,6 +633,28 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
+	    try:
+                freq_comb = np.load(os.path.join(str(np.load('last_vna_dir.npy')), 'bb_targ_freqs.npy'))
+	        freq_comb = freq_comb[freq_comb != 0]
+	        freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
+	        ri.freq_comb = freq_comb
+                ri.upconvert = np.sort(((ri.freq_comb + (ri.center_freq)*1.0e6))/1.0e6)
+                print "RF tones =", ri.upconvert
+                if len(ri.freq_comb) > 400:
+                    fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)    
+                    time.sleep(0.1)
+                else:
+                    fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**9 -1)    
+                    time.sleep(0.1)
+                ri.writeQDR(ri.freq_comb)
+		#setAtten(27, 17)
+                np.save("last_freq_comb.npy", ri.freq_comb)
+	    except KeyboardInterrupt:
+	        pass
+        if opt == 13:
+	    if not fpga:
+	        print "\nROACH link is down"
+		break
             prompt = raw_input('Write tones (recommended for first time)? (y/n) ')
             if prompt == 'y':
 	        try:
@@ -645,7 +667,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                 except KeyboardInterrupt:
                     pass
             plotTargSweep(str(np.load("last_targ_dir.npy")))
-        if opt == 13:
+        if opt == 14:
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
@@ -655,7 +677,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                 plotPhasePSD(chan, udp, ri, time_interval)
             except KeyboardInterrupt:
                 pass
-        if opt == 14:
+        if opt == 15:
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
@@ -664,7 +686,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                 udp.saveDirfile_chanRange(time_interval)
             except KeyboardInterrupt:
                 pass
-        if opt == 15:
+        if opt == 16:
             sys.exit()
         return upload_status
     
