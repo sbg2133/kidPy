@@ -33,7 +33,6 @@ from scipy import signal
 import scipy.fftpack
 import pygetdata as gd
 from sean_psd import amplitude_and_power_spectrum as sean_psd
-#import find_kids_blast as fk 
 
 class roachInterface(object):
     
@@ -49,7 +48,8 @@ class roachInterface(object):
 	self.max_neg_freq = np.float(self.gc[np.where(self.gc == 'max_neg_freq')[0][0]][1])
 	self.min_neg_freq = np.float(self.gc[np.where(self.gc == 'min_neg_freq')[0][0]][1])
 	self.symm_offset = np.float(self.gc[np.where(self.gc == 'symm_offset')[0][0]][1])
-	pos_freqs, self.pos_delta = np.linspace(self.min_pos_freq, self.max_pos_freq, self.Nfreq/2, retstep = True)
+	pos_freqs, self.pos_delta = np.linspace(self.min_pos_freq, self.max_pos_freq, self.Nfreq, retstep = True)
+	neg_freqs, self.neg_delta = np.linspace(self.min_neg_freq + self.symm_offset, self.max_neg_freq + self.symm_offset, self.Nfreq, retstep = True)
 	self.center_freq = np.float(self.gc[np.where(self.gc == 'center_freq')[0][0]][1]) 
 	self.dac_samp_freq = 512.0e6
         self.fpga_samp_freq = 256.0e6
@@ -59,7 +59,7 @@ class roachInterface(object):
 	self.LUTbuffer_len = 2**21
         self.dac_freq_res = 2*self.dac_samp_freq/self.LUTbuffer_len
         self.fft_len = 1024
-        self.accum_len = (2**19) 
+        self.accum_len = 2**19 
         self.accum_freq = self.fpga_samp_freq / self.accum_len
 	self.I_dds = np.zeros(self.LUTbuffer_len)
 	self.freq_comb = []
@@ -83,9 +83,9 @@ class roachInterface(object):
 	return 0
 
     def makeFreqComb(self):
-	neg_freqs, neg_delta = np.linspace(self.min_neg_freq + self.symm_offset, self.max_neg_freq + self.symm_offset, self.Nfreq/2, retstep = True)
-	pos_freqs, pos_delta = np.linspace(self.min_pos_freq, self.max_pos_freq, self.Nfreq/2, retstep = True)
-	freq_comb = np.concatenate((neg_freqs, pos_freqs))
+	neg_freqs, neg_delta = np.linspace(self.min_neg_freq + self.symm_offset, self.max_neg_freq + self.symm_offset, self.Nfreq, retstep = True)
+	pos_freqs, pos_delta = np.linspace(self.min_pos_freq, self.max_pos_freq, self.Nfreq, retstep = True)
+        freq_comb = np.concatenate((neg_freqs, pos_freqs))
 	freq_comb = freq_comb[freq_comb != 0]
 	freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
         if len(freq_comb) > 400:
@@ -225,7 +225,7 @@ class roachInterface(object):
 	#xf = np.linspace(0.0, 1.0/(2.0*T), N/2)
 	plot1 = fig.add_subplot(411)
 	#plt.xticks(np.arange(-250., 250., 10))
-	plt.title("chan " + str(chan) + ", freq = " + str(self.freq_comb[chan]/1.0e6) + " MHz", size = 12)
+	#plt.title("chan " + str(chan) + ", freq = " + str(self.freq_comb[chan]/1.0e6) + " MHz", size = 12)
 	line1, = plot1.plot(xf, np.zeros(N), label = 'Bin in', color = 'green', linewidth = 1)
 	plt.grid()
 	plot2 = fig.add_subplot(412)

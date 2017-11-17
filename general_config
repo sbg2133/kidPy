@@ -1,12 +1,13 @@
 FIRMWARE_FILE ./stable_11042017_2017_Nov_06_1415.fpg
 
-VNA_SAVEPATH ./sweeps_Nov2017/vna
-TARG_SAVEPATH ./sweeps_Nov2017/targ
+VNA_SAVEPATH ./november2017/vna
+TARG_SAVEPATH ./novmeber2017/targ
 
 DIRFILE_SAVEPATH ./data
 
 # Roach interface
-freq_list "250um_array.npy"
+dds_shift 318
+freq_list 250um_array.npy
 lo_step 1.0e3
 center_freq 828.0
 Nfreq 1000
@@ -18,5 +19,5 @@ symm_offset 250.0e3
 test_freq 50.0125e6
 
 smoothing_scale 5.0e6
-peak_threshold 3
-spacing_threshold 1.0e5
+peak_threshold 6
+spacing_threshold 2.0e4

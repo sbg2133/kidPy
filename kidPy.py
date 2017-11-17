@@ -10,6 +10,7 @@ import time
 import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
 from scipy import signal, ndimage, fftpack
+from ETCP import ETCPClient
 plt.ion()
 
 # load general settings
@@ -36,11 +37,17 @@ lo_step = np.float(gc[np.where(gc == 'lo_step')[0][0]][1])
 center_freq = np.float(gc[np.where(gc == 'center_freq')[0][0]][1])
 test_freq = np.float(gc[np.where(gc == 'test_freq')[0][0]][1])
 test_freq = np.array([test_freq])
+freq_list = gc[np.where(gc == 'freq_list')[0][0]][1]
 
 # parameters for freq search
 smoothing_scale = np.float(gc[np.where(gc == 'smoothing_scale')[0][0]][1])
 peak_threshold = np.float(gc[np.where(gc == 'peak_threshold')[0][0]][1])
 spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
+
+###### For ONR ########
+def getStageCoords():
+    vx, vy = ETCPClient('137.79.43.78', 30245)
+    return vx, vy
 
 def testConn(fpga):
     if not fpga:
@@ -58,11 +65,26 @@ def initValon(valon, ext_ref = False, ref_freq = 10):
     valon.set_refdoubler(CLOCK, 0)
     valon.set_refdoubler(LO, 0)
     valon.set_pfd(CLOCK, 40.)
-    valon.set_pfd(LO, 40.)
+    valon.set_pfd(LO, 10.)
     valon.set_frequency(LO, center_freq) # LO
     valon.set_frequency(CLOCK, 512.) # Clock
     valon.set_rf_level(CLOCK, 6)
-    valon.set_rf_level(LO, 7)
+    valon.set_rf_level(LO, -4)
+    return
+
+# Return valon instance
+def getValon():
+    try:
+        valon = valon_synth9.Synthesizer(network[np.where(network == 'valon_comm_port')[0][0]][1]) 
+        return valon
+    except OSError:
+        "Valon could not be initialized. Check comm port and power supply."
+    return
+
+# For setting Valon
+def setValonLevel(dBm):
+    v = valon_synth9.Synthesizer('/dev/ttyUSB0')
+    v.set_rf_level(2, dBm)
     return
 
 # For setting MCL RUDAT attenuators
@@ -129,9 +151,9 @@ def calibrateADC(target_rms_mv, outAtten, inAtten):
 caption1 = '\n\t\033[95mKID-PY ROACH2 Readout\033[95m'
 caption2 = '\n\t\033[94mThese functions require UDP streaming to be active\033[94m'
 captions = [caption1, caption2]
-main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate freqs from VNA sweep','Write found freqs', 'Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan (phase)','Exit'] 
+main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate freqs from VNA sweep', 'Write found freqs','Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan (phase)','Exit'] 
 
-def vnaSweep(ri, udp, valon, write = False, Navg = 50):
+def vnaSweep(ri, udp, valon, write = False, Navg = 80):
     if not os.path.exists(vna_savepath):
         os.makedirs(vna_savepath)
     sweep_dir = vna_savepath + '/' + \
@@ -139,14 +161,12 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 50):
     os.mkdir(sweep_dir)
     np.save("./last_vna_dir.npy", sweep_dir)
     valon.set_frequency(LO, center_freq/1.0e6)
-    span = ri.pos_delta
+    span = ri.neg_delta
+    print "Sweep Span =", np.round(ri.neg_delta,2), "Hz"
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
     sweep_freqs = np.arange(start, stop, lo_step)
     sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
-    if write:
-        ri.makeFreqComb()
-        ri.writeQDR(ri.freq_comb)
     if not np.size(ri.freq_comb):
         ri.makeFreqComb()
     np.save(sweep_dir + '/bb_freqs.npy', ri.freq_comb)
@@ -157,7 +177,8 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 50):
     for freq in sweep_freqs:
         print 'LO freq =', freq/1.0e6
         valon.set_frequency(LO, freq/1.0e6)
-        time.sleep(0.1)
+        #print "LO freq =", valon.get_frequency(LO)
+        time.sleep(0.2)
     	udp.saveSweepData(Navg, sweep_dir, freq, Nchan) 
 	time.sleep(0.1)
     valon.set_frequency(LO, center_freq) # LO
@@ -172,17 +193,12 @@ def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
        str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
     os.mkdir(sweep_dir)
     np.save("./last_targ_dir.npy", sweep_dir)
-    # uncomment once find_kids works
-    #target_freqs = np.load(vna_savepath + '/target_freqs.npy')
-    # until find_kids works, just use bb_freqs
-    target_freqs = np.load(vna_savepath + "/bb_freqs.npy")
-    np.save(sweep_dir + '/target_freqs.npy', target_freqs)
-    bb_target_freqs = target_freqs
-    # uncomment when find_kids works
-    #bb_target_freqs = ((self.target_freqs*1.0e6) - center_freq)
+    target_freqs = np.load(vna_savepath + '/bb_targ_freqs.npy')
+    np.save(sweep_dir + '/bb_target_freqs.npy', target_freqs)
+    bb_target_freqs = ((self.target_freqs*1.0e6) - center_freq)
     bb_target_freqs = np.roll(bb_target_freqs, - np.argmin(np.abs(bb_target_freqs)) - 1)
     upconvert = np.sort((bb_target_freqs + center_freq*1.0e6)/1.0e6)
-    print "RF tones =", upconvert
+    #print "RF tones =", upconvert
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
     sweep_freqs = np.arange(start, stop, lo_step)
@@ -193,10 +209,10 @@ def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
         ri.writeQDR(bb_target_freqs)
     for freq in sweep_freqs:
         print 'LO freq =', freq/1.0e6
-	time.sleep(0.1)
         valon.set_frequency(LO, freq/1.0e6)
 	time.sleep(0.2)
     	udp.saveSweepData(Navg, sweep_dir, freq, len(bb_target_freqs)) 
+	time.sleep(0.1)
     valon.set_frequency(LO, center_freq)
     return
 
@@ -288,9 +304,9 @@ def getSystemState(fpga, ri, udp, valon):
     #print "Reference:"
     print "LO center freq:", center_freq, "MHz"
     print "Current LO freq:", valon.get_frequency(LO), "MHz"
-    print "Current LO power:", np.abs(valon.get_rf_level(LO)), "dBm"
+    print "Current LO power:", -1*valon.get_rf_level(LO), "dBm"
     print "Current clock freq:", valon.get_frequency(CLOCK), "MHz"
-    print "Current clock power:", np.abs(valon.get_rf_level(CLOCK)), "dBm"
+    print "Current clock power:", -1*valon.get_rf_level(CLOCK), "dBm"
     return
 
 def plotPhasePSD(chan, udp, ri, time_interval):
@@ -305,7 +321,7 @@ def plotPhasePSD(chan, udp, ri, time_interval):
     f, Spp = signal.welch(phases, ri.accum_freq, nperseg=len(phases)/2)
     #f, Spp = signal.periodogram(phases, fs = 488.28125)
     #f, Spp = sean_psd(phases, 1/self.accum_freq)
-    Spp = 10*np.log10(Spp[1:])
+    Spp = 10*np.log10(Spp[1:]) 
     print "MIN =", np.min(Spp), "dBc/Hz"
     print "MAX =", np.max(Spp), "dBc/Hz"
     ax.set_ylim((np.min(Spp) - 10, np.max(Spp) + 10))
@@ -388,7 +404,6 @@ def findFreqs(path, plot = False):
     for i in range(len(kid_idx) - 1):
         spacing = (chan_freqs[kid_idx[i + 1]] - chan_freqs[kid_idx[i]])
         if (spacing < spacing_threshold):
-            print spacing, spacing_threshold
             if (new_mags[kid_idx[i + 1]] < new_mags[kid_idx[i]]):
                 del_idx.append(i)
             else:
@@ -414,7 +429,7 @@ def findFreqs(path, plot = False):
 
     if len(bb_target_freqs) > 0:
     	bb_target_freqs = np.roll(bb_target_freqs, - np.argmin(np.abs(bb_target_freqs)) - 1)
-    	np.save(path + '/last_bb_targ_freqs.npy', bb_target_freqs)
+    	np.save(path + '/bb_targ_freqs.npy', bb_target_freqs)
     	print len(rf_target_freqs), "KIDs found:\n"
         print rf_target_freqs
     else:
@@ -424,7 +439,7 @@ def findFreqs(path, plot = False):
         plt.figure(1)
         plt.plot(chan_freqs, mags,'b', label = 'no filter')
         plt.plot(chan_freqs, filtermags,'g', label = 'filtered')
-        plt.xlabel('frequency (MHz)')
+        plt.xlabel('frequency (Hz)')
         plt.ylabel('dB')
         plt.legend()
         plt.figure(2)
@@ -433,7 +448,7 @@ def findFreqs(path, plot = False):
         plt.figure(4)
         plt.plot(chan_freqs, mags, 'b')
         plt.plot(chan_freqs[kid_idx], mags[kid_idx], 'r*')
-        plt.xlabel('frequency (MHz)')
+        plt.xlabel('frequency (Hz)')
         plt.ylabel('dB')
     return
 
@@ -444,7 +459,7 @@ def menu(captions, options):
             print '\t' +  '\033[32m' + str(i) + ' ..... ' '\033[0m' +  options[i] + '\n'
     print '\t' + captions[1] + '\n'
     for i in range(len(options)):
-	if (i >= 9):
+        if (i >= 9):
             print '\t' +  '\033[32m' + str(i) + ' ..... ' '\033[0m' +  options[i] + '\n'
     opt = input()
     return opt
@@ -459,7 +474,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
             print '\n\t\033[93mNo firmware onboard. If ROACH link is up, try upload option\033[93m'
         else:
             #print '\n\t\033[92mFirmware: \033[92m' + ' ' + name + ' ' + build_time
-            print '\n\t\033[92mFirmware:[92m' + firmware_file
+            print '\n\t\033[92mFirmware uploaded\033[92m'
         opt = menu(captions,main_opts)
         if opt == 0:
 	    result = testConn(fpga)
@@ -491,8 +506,9 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	        print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
 		break
 	    fpga.write_int(regs[np.where(regs == 'accum_len_reg')[0][0]][1], ri.accum_len - 1)
+	    fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], int(gc[np.where(gc == 'dds_shift')[0][0]][1]))
             time.sleep(0.1)
-            ri.lpf(ri.boxcar)
+            ri.lpf(ri.hanning)
             if (ri.qdrCal() < 0):
 	        print '\033[93mQDR calibration failed... Check FPGA clock source\033[93m'
                 break
@@ -512,10 +528,10 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	        prompt = raw_input('Full test comb? y/n ')
                 if prompt == 'y':
                     ri.makeFreqComb()
-		    setAtten(30, 20)
+		    #setAtten(30, 20)
                 else:
                     ri.freq_comb = test_freq 
-		    setAtten(30, 30)
+		    #setAtten(30, 30)
                 if len(ri.freq_comb) > 400:
                     fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)
                     time.sleep(0.1)
@@ -557,7 +573,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                     fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**9 -1)    
                     time.sleep(0.1)
                 ri.writeQDR(ri.freq_comb)
-		setAtten(27, 17)
+		#setAtten(27, 17)
                 np.save("last_freq_comb.npy", ri.freq_comb)
 	    except KeyboardInterrupt:
 	        pass
@@ -616,19 +632,20 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
             if prompt == 'y':
                 try:
                     vnaSweep(ri, udp, valon, write = True)
+                    plotVNASweep(str(np.load("last_vna_dir.npy")))
                 except KeyboardInterrupt:
                     pass
             if prompt == 'n':
                 try:
                     vnaSweep(ri, udp, valon)
+                    plotVNASweep(str(np.load("last_vna_dir.npy")))
                 except KeyboardInterrupt:
                     pass
-            plotVNASweep(str(np.load("last_vna_dir.npy")))
         if opt == 11:
             try:
 	        findFreqs(str(np.load("last_vna_dir.npy")), plot = True)
             except KeyboardInterrupt:
-	        pass
+		break
         if opt == 12:
 	    if not fpga:
 	        print "\nROACH link is down"
@@ -637,8 +654,9 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                 freq_comb = np.load(os.path.join(str(np.load('last_vna_dir.npy')), 'bb_targ_freqs.npy'))
 	        freq_comb = freq_comb[freq_comb != 0]
 	        freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
-	        ri.freq_comb = freq_comb
-                ri.upconvert = np.sort(((ri.freq_comb + (ri.center_freq)*1.0e6))/1.0e6)
+	        ri.freq_comb = (freq_comb/1.0e6) - center_freq*1.0e6
+                print ri.freq_comb
+                ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)
                 print "RF tones =", ri.upconvert
                 if len(ri.freq_comb) > 400:
                     fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)    
@@ -659,14 +677,15 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
             if prompt == 'y':
 	        try:
                     targetSweep(ri, udp, valon, write = True)
+                    plotTargSweep(str(np.load("last_targ_dir.npy")))
                 except KeyboardInterrupt:
                     pass
             if prompt == 'n':
                 try:
                     targetSweep(ri, udp, valon)
+                    plotTargSweep(str(np.load("last_targ_dir.npy")))
                 except KeyboardInterrupt:
                     pass
-            plotTargSweep(str(np.load("last_targ_dir.npy")))
         if opt == 14:
 	    if not fpga:
 	        print "\nROACH link is down"
@@ -681,9 +700,13 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
+            stage_coords = raw_input('Add stage coordinates (y/n) ? ')
             time_interval = input('Time interval (s) ? ')
             try:
-                udp.saveDirfile_chanRange(time_interval)
+                if stage_coords == 'y':
+                    udp.saveDirfile_chanRange(time_interval, stage_coords = True)
+                else:
+                    udp.saveDirfile_chanRange(time_interval)
             except KeyboardInterrupt:
                 pass
         if opt == 16:
@@ -707,32 +730,36 @@ def plot_opt(ri):
             try:
                 ri.plotADC()
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
         if opt == 1:
             try:
                 ri.plotFFT()
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
         if opt == 2:
             chan = input('Channel = ? ')
             try:
                 ri.plotMixer(chan)
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
         if opt == 3:
             try:
                 ri.plotAccum()
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
     return
 
 def main():
     s = None
     try:
-        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 1.)
-    except (RuntimeError, AttributeError):
+        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
+    except RuntimeError:
         fpga = None
-
+    
     # UDP socket
     s = socket(AF_PACKET, SOCK_RAW, htons(3))
 
@@ -748,7 +775,7 @@ def main():
     # GbE interface
     udp = roachDownlink(fpga, regs, network, s, ri.accum_freq)
     udp.configSocket()
-
+    
     os.system('clear')
     while 1:
         try:

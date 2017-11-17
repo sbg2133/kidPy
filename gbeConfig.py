@@ -111,17 +111,22 @@ class roachDownlink(object):
     
     def streamChanPhase(self, chan, time_interval):	
 	self.zeroPPS()
-	Npackets = np.ceil(time_interval * self.data_rate)
+	Npackets = int(np.ceil(time_interval * self.data_rate))
 	phases = np.zeros(Npackets)
 	count = 0
         while count < Npackets:
 	    try:
 	        packet, data, header, saddr = self.parsePacketData()
-	        __, __, phase = self.parseChanData(chan, data)
-	        phases[count] = phase
-                count += 1
-            except TypeError:
-	        count -= 1
+		if not packet:
+		    continue
+                else:
+	            __, __, phase = self.parseChanData(chan, data)
+	            phases[count] = phase
+	    except TypeError:
+	        continue
+	    if not np.size(data):
+	        continue
+            count += 1
         return phases
 
     def printChanInfo(self, chan, time_interval):
@@ -136,7 +141,6 @@ class roachDownlink(object):
 		    continue
 	    except TypeError:
 	        continue
-	    packet, data, header, saddr = self.parsePacketData()
 	    if not np.size(data):
 	        #count -= 1
 	        continue
@@ -176,6 +180,10 @@ class roachDownlink(object):
         while count < Navg + skip_packets:
 	    try:
 	        packet, data, header, saddr = self.parsePacketData()
+		if not packet:
+		    continue
+	        if not np.size(data):
+	            continue
                 odd_chan = channels[1::2]
                 even_chan = channels[0::2]
                 I_odd = data[1024 + ((odd_chan - 1) / 2)]    
@@ -193,25 +201,21 @@ class roachDownlink(object):
                     else:
                 	I = I_even[0]
                 	Q = Q_even[0]
-                        I_buffer[count] = I
-                        Q_buffer[count] = Q
                 else:
                     I = np.hstack(zip(I_even, I_odd))
                     Q = np.hstack(zip(Q_even, Q_odd))
-                    I_buffer[count] = I
-                    Q_buffer[count] = Q
-		time.sleep(0.001)
+                I_buffer[count] = I
+                Q_buffer[count] = Q
                 count += 1
                 I_file = 'I' + str(lo_freq)
                 Q_file = 'Q' + str(lo_freq)
                 np.save(os.path.join(savepath,I_file), np.mean(I_buffer[skip_packets:], axis = 0)) 
                 np.save(os.path.join(savepath,Q_file), np.mean(Q_buffer[skip_packets:], axis = 0))
 	    except TypeError:
-		count -= 1
-	        #continue
+	        continue
         return
 
-    def saveDirfile_chanRange(self, time_interval):
+    def saveDirfile_chanRange(self, time_interval, stage_coords = False):
 	start_chan = input("Start chan # ? ")
 	end_chan = input("End chan # ? ")
 	chan_range = range(start_chan, end_chan + 1)
@@ -231,8 +235,6 @@ class roachDownlink(object):
         for chan in chan_range:
             phase_fields.append('chP_' + str(chan))
             d.add_spec('chP_' + str(chan) + ' RAW FLOAT64 1')
-        d.add_spec('time RAW FLOAT64 1')
-        d.add_spec('packet_count RAW UINT32 1')
 	d.close()
         d = gd.dirfile(filename,gd.RDWR|gd.UNENCODED)
         nfo_phase = map(lambda z: filename + "/chP_" + str(z), chan_range)
@@ -246,22 +248,20 @@ class roachDownlink(object):
 	        packet, data, header, saddr = self.parsePacketData()
 		if not packet:
 		    continue
+            #### Add field for stage coords ####
 	    except TypeError:
 	        continue
-	    #if not np.size(data):
-	    #    count -= 1
-	    #    continue
             packet_count = (np.fromstring(packet[-4:],dtype = '>I'))
             idx = 0
 	    for chan in range(start_chan, end_chan + 1):
 	        __, __, phase = self.parseChanData(chan, data)
 	        fo_phase[idx].write(struct.pack('d', phase))
 	        fo_phase[idx].flush()
-	        fo_time.write(struct.pack('d', ts))
-	        fo_count.write(struct.pack('L',packet_count))
-	        fo_time.flush()
-	        fo_count.flush()
 		idx += 1
+	    fo_count.write(struct.pack('L',packet_count))
+	    fo_count.flush()
+	    fo_time.write(struct.pack('d', ts))
+	    fo_time.flush()
 	    count += 1
         for idx in range(len(fo_phase)):
 	     fo_phase[idx].close()
