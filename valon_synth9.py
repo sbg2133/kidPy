@@ -65,6 +65,9 @@ class Synthesizer:
 
         @return: True if success (bool)
         """
+	#inserted to double frequency for chan 2
+	if synth == 2:
+		freq = 2*freq
         self.conn.open()
         data = 's'+str(synth)+';f'+str(freq)+'\r'
         self.conn.write(data)

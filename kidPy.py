@@ -168,7 +168,7 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 80):
     sweep_freqs = np.arange(start, stop, lo_step)
     sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
     if not np.size(ri.freq_comb):
-        ri.makeFreqComb()
+        ri.makeFreqComb(left_sideband_only)
     np.save(sweep_dir + '/bb_freqs.npy', ri.freq_comb)
     np.save(sweep_dir + '/sweep_freqs.npy', sweep_freqs)
     Nchan = len(ri.freq_comb)
@@ -527,7 +527,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
             try:
 	        prompt = raw_input('Full test comb? y/n ')
                 if prompt == 'y':
-                    ri.makeFreqComb()
+                    ri.makeFreqComb(left_sideband_only = True)
 		    #setAtten(30, 20)
                 else:
                     ri.freq_comb = test_freq 

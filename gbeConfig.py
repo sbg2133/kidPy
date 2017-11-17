@@ -6,6 +6,7 @@ import struct
 import select
 import errno
 import pygetdata as gd
+from ETCP import ETCPClient
 
 class roachDownlink(object):
 
@@ -215,6 +216,11 @@ class roachDownlink(object):
 	        continue
         return
 
+    ###### For ONR ########
+    def getStageCoords(self):
+        vx, vy = ETCPClient('137.79.43.78', 30245)
+        return vx, vy
+
     def saveDirfile_chanRange(self, time_interval, stage_coords = False):
 	start_chan = input("Start chan # ? ")
 	end_chan = input("End chan # ? ")
@@ -235,6 +241,12 @@ class roachDownlink(object):
         for chan in chan_range:
             phase_fields.append('chP_' + str(chan))
             d.add_spec('chP_' + str(chan) + ' RAW FLOAT64 1')
+        if stage_coords:
+            #### Add field for stage coords ####
+            d.add_spec('x RAW UINT16 1')
+            d.add_spec('y RAW UINT16 1')
+        d.add_spec('time RAW FLOAT64 1')
+        d.add_spec('packet_count RAW UINT32 1')
 	d.close()
         d = gd.dirfile(filename,gd.RDWR|gd.UNENCODED)
         nfo_phase = map(lambda z: filename + "/chP_" + str(z), chan_range)
@@ -248,6 +260,13 @@ class roachDownlink(object):
 	        packet, data, header, saddr = self.parsePacketData()
 		if not packet:
 		    continue
+                vx, vy = self.getStageCoords()
+                x = open(filename + "/x", "ab")
+                y = open(filename + "/y", "ab")
+                x.write(struct.pack('H', vx))
+                x.flush()
+                y.write(struct.pack('H', vy))
+                y.flush()
             #### Add field for stage coords ####
 	    except TypeError:
 	        continue
@@ -265,6 +284,8 @@ class roachDownlink(object):
 	    count += 1
         for idx in range(len(fo_phase)):
 	     fo_phase[idx].close()
+        x.close()
+        y.close()
 	fo_time.close()
 	fo_count.close()
         d.close()
