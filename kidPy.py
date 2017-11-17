@@ -184,7 +184,7 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 80):
     valon.set_frequency(LO, center_freq) # LO
     return 
 
-def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
+def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 80):
     # span = Hz 
     vna_savepath = str(np.load("last_vna_dir.npy"))
     if not os.path.exists(targ_savepath):
@@ -195,7 +195,7 @@ def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
     np.save("./last_targ_dir.npy", sweep_dir)
     target_freqs = np.load(vna_savepath + '/bb_targ_freqs.npy')
     np.save(sweep_dir + '/bb_target_freqs.npy', target_freqs)
-    bb_target_freqs = ((self.target_freqs*1.0e6) - center_freq)
+    bb_target_freqs = ((target_freqs*1.0e6) - center_freq)
     bb_target_freqs = np.roll(bb_target_freqs, - np.argmin(np.abs(bb_target_freqs)) - 1)
     upconvert = np.sort((bb_target_freqs + center_freq*1.0e6)/1.0e6)
     #print "RF tones =", upconvert
@@ -320,7 +320,7 @@ def plotPhasePSD(chan, udp, ri, time_interval):
     phases = udp.streamChanPhase(chan, time_interval)
     f, Spp = signal.welch(phases, ri.accum_freq, nperseg=len(phases)/2)
     #f, Spp = signal.periodogram(phases, fs = 488.28125)
-    #f, Spp = sean_psd(phases, 1/self.accum_freq)
+    #f, Spp = sean_psd(phases, 1/elf.accum_freq)
     Spp = 10*np.log10(Spp[1:]) 
     print "MIN =", np.min(Spp), "dBc/Hz"
     print "MAX =", np.max(Spp), "dBc/Hz"
