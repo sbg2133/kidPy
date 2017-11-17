@@ -1,7 +1,7 @@
 FIRMWARE_FILE ./stable_11042017_2017_Nov_06_1415.fpg
 
 VNA_SAVEPATH ./november2017/vna
-TARG_SAVEPATH ./novmeber2017/targ
+TARG_SAVEPATH ./november2017/targ
 
 DIRFILE_SAVEPATH ./data
 

@@ -184,7 +184,7 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 80):
     valon.set_frequency(LO, center_freq) # LO
     return 
 
-def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 80):
+def targetSweep(ri, udp, valon, write = False, span = 100.0e3, Navg = 80):
     # span = Hz 
     vna_savepath = str(np.load("last_vna_dir.npy"))
     if not os.path.exists(targ_savepath):
@@ -195,9 +195,10 @@ def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 80):
     np.save("./last_targ_dir.npy", sweep_dir)
     target_freqs = np.load(vna_savepath + '/bb_targ_freqs.npy')
     np.save(sweep_dir + '/bb_target_freqs.npy', target_freqs)
-    bb_target_freqs = ((target_freqs*1.0e6) - center_freq)
+    bb_target_freqs = target_freqs/1.0e6 - center_freq*1.0e6
+    print bb_target_freqs
     bb_target_freqs = np.roll(bb_target_freqs, - np.argmin(np.abs(bb_target_freqs)) - 1)
-    upconvert = np.sort((bb_target_freqs + center_freq*1.0e6)/1.0e6)
+    upconvert = np.sort((bb_target_freqs + center_freq*1.0e6))
     #print "RF tones =", upconvert
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
