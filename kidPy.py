@@ -10,7 +10,6 @@ import time
 import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
 from scipy import signal, ndimage, fftpack
-from ETCP import ETCPClient
 plt.ion()
 
 # load general settings
@@ -43,11 +42,6 @@ freq_list = gc[np.where(gc == 'freq_list')[0][0]][1]
 smoothing_scale = np.float(gc[np.where(gc == 'smoothing_scale')[0][0]][1])
 peak_threshold = np.float(gc[np.where(gc == 'peak_threshold')[0][0]][1])
 spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
-
-###### For ONR ########
-def getStageCoords():
-    vx, vy = ETCPClient('137.79.43.78', 30245)
-    return vx, vy
 
 def testConn(fpga):
     if not fpga:
@@ -700,13 +694,9 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
-            stage_coords = raw_input('Add stage coordinates (y/n) ? ')
             time_interval = input('Time interval (s) ? ')
             try:
-                if stage_coords == 'y':
-                    udp.saveDirfile_chanRange(time_interval, stage_coords = True)
-                else:
-                    udp.saveDirfile_chanRange(time_interval)
+                udp.saveDirfile_chanRange(time_interval)
             except KeyboardInterrupt:
                 pass
         if opt == 16:
