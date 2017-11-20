@@ -83,8 +83,8 @@ class roachInterface(object):
 	return 0
 
     def makeFreqComb(self):
-	neg_freqs, neg_delta = np.linspace(self.min_neg_freq + self.symm_offset, self.max_neg_freq + self.symm_offset, self.Nfreq, retstep = True)
-	pos_freqs, pos_delta = np.linspace(self.min_pos_freq, self.max_pos_freq, self.Nfreq, retstep = True)
+	neg_freqs, neg_delta = np.linspace(self.min_neg_freq + self.symm_offset, self.max_neg_freq + self.symm_offset, self.Nfreq/2, retstep = True)
+	pos_freqs, pos_delta = np.linspace(self.min_pos_freq, self.max_pos_freq, self.Nfreq/2, retstep = True)
         freq_comb = np.concatenate((neg_freqs, pos_freqs))
 	freq_comb = freq_comb[freq_comb != 0]
 	freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
