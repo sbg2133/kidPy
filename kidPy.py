@@ -234,9 +234,8 @@ def plotVNASweep(path):
     I = np.reshape(np.transpose(Is),(len(Is[0])*len(sweep_freqs)))
     mag = np.sqrt(I**2 + Q**2)
     mag = 20*np.log10(mag/np.max(mag))
-    mag = np.concatenate((mag[len(mag)/2:],mag[:len(mag)/2]))
+    mag = np.hstack(mag)
     rf_freqs = np.hstack(rf_freqs)
-    rf_freqs = np.concatenate((rf_freqs[len(rf_freqs)/2:],rf_freqs[:len(rf_freqs)/2]))
     plt.plot(rf_freqs, mag)
     plt.title(path, size = 16)
     plt.xlabel('frequency (MHz)', size = 16)
@@ -332,11 +331,11 @@ def filter_trace(path, bb_freqs, sweep_freqs):
     for chan in channels:
     	mag[chan] = (np.sqrt(chan_I[:,chan]**2 + chan_Q[:,chan]**2))
     	chan_freqs[chan] = (sweep_freqs + bb_freqs[chan])/1.0e6
-    mag = np.concatenate((mag[len(mag)/2:], mag[:len(mag)/2]))
-    mags = np.hstack(mag)
-    mags = 20*np.log10(mags/np.max(mags))
+    #mag = np.concatenate((mag[len(mag)/2:], mag[0:len(mag)/2]))
+    mags = 20*np.log10(mag/np.max(mag))
+    mags = np.hstack(mags)
+    #chan_freqs = np.concatenate((chan_freqs[len(chan_freqs)/2:],chan_freqs[0:len(chan_freqs)/2]))
     chan_freqs = np.hstack(chan_freqs)
-    chan_freqs = np.concatenate((chan_freqs[len(chan_freqs)/2:],chan_freqs[:len(chan_freqs)/2]))
     return chan_freqs, mags
 
 def lowpass_cosine(y, tau, f_3db, width, padd_data=True):
