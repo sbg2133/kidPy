@@ -10,6 +10,7 @@ import time
 import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
 from scipy import signal, ndimage, fftpack
+import find_kids_interactive as fk
 from ETCP import ETCPClient
 plt.ion()
 
@@ -644,7 +645,10 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                     pass
         if opt == 11:
             try:
-	        findFreqs(str(np.load("last_vna_dir.npy")), plot = True)
+                path = str(np.load("last_vna_dir.npy"))
+		print "Sweep path:", path
+		fk.main(path, center_freq, lo_step, smoothing_scale, peak_threshold, spacing_threshold)
+		#findFreqs(str(np.load("last_vna_dir.npy")), plot = True)
             except KeyboardInterrupt:
 		break
         if opt == 12:
@@ -652,13 +656,14 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	        print "\nROACH link is down"
 		break
 	    try:
-                freq_comb = np.load(os.path.join(str(np.load('last_vna_dir.npy')), 'bb_targ_freqs.npy'))
-	        freq_comb = freq_comb[freq_comb != 0]
-	        freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
-	        ri.freq_comb = (freq_comb/1.0e6) - center_freq*1.0e6
-                print ri.freq_comb
-                ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)
-                print "RF tones =", ri.upconvert
+                bb = np.load(os.path.join(str(np.load('last_vna_dir.npy')), 'bb_targ_freqs.npy'))
+	        bb = bb[bb != 0]
+                print "Baseband tones =", bb
+		print
+	        rf = bb + center_freq*1.0e6
+                print "RF tones =", rf
+		ri.freq_comb = bb
+	        ri.freq_comb = np.roll(ri.freq_comb, - np.argmin(np.abs(ri.freq_comb)) - 1)
                 if len(ri.freq_comb) > 400:
                     fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)    
                     time.sleep(0.1)

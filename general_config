@@ -20,4 +20,4 @@ test_freq 50.0125e6
 
 smoothing_scale 5.0e6
 peak_threshold 6
-spacing_threshold 2.0e4
+spacing_threshold 20
