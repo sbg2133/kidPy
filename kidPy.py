@@ -10,6 +10,7 @@ import time
 import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
 from scipy import signal, ndimage, fftpack
+import find_kids_interactive as fk
 plt.ion()
 
 # load general settings
@@ -636,7 +637,10 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                     pass
         if opt == 11:
             try:
-	        findFreqs(str(np.load("last_vna_dir.npy")), plot = True)
+                path = str(np.load("last_vna_dir.npy"))
+		print "Sweep path:", path
+		fk.main(path, center_freq, lo_step, smoothing_scale, peak_threshold, spacing_threshold)
+	        #findFreqs(str(np.load("last_vna_dir.npy")), plot = True)
             except KeyboardInterrupt:
 		break
         if opt == 12:
