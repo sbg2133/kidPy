@@ -1,6 +1,6 @@
 var_name_in_kidpy param_value
 
-roach_ppc_ip 192.168.40.68
+roach_ppc_ip 192.168.40.70
 valon_comm_port /dev/ttyUSB0
 udp_source_ip 192.168.40.71
 udp_source_port 60000
