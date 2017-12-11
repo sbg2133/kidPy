@@ -13,6 +13,8 @@ from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
 plt.ion()
 
+
+
 # load general settings
 gc = np.loadtxt("./general_config", dtype = "str")
 firmware = gc[np.where(gc == 'FIRMWARE_FILE')[0][0]][1]
@@ -25,6 +27,9 @@ regs = np.loadtxt("./firmware_registers", dtype = "str")
 
 # load list of network parameters
 network = np.loadtxt("./network_config", dtype = "str")
+
+roach_ppc_ip = getbyhostname()
+pi_ip = getbyhostname()
 
 buf_size = int(network[np.where(network == 'buf_size')[0][0]][1])
 header_len = int(network[np.where(network == 'header_len')[0][0]][1])
@@ -153,7 +158,7 @@ def calibrateADC(target_rms_mv, outAtten, inAtten):
 caption1 = '\n\t\033[95mKID-PY ROACH2 Readout\033[95m'
 caption2 = '\n\t\033[94mThese functions require UDP streaming to be active\033[94m'
 captions = [caption1, caption2]
-main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate freqs from VNA sweep', 'Write found freqs','Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan (phase)','Exit'] 
+main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate freqs from VNA sweep', 'Write found freqs','Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan','Exit'] 
 
 def vnaSweep(ri, udp, valon, write = False, Navg = 80):
     if not os.path.exists(vna_savepath):
@@ -732,9 +737,8 @@ def plot_opt(ri):
             try:
                 ri.plotADC()
             except KeyboardInterrupt:
-                #fig = plt.gcf()
-                #plt.close(fig)
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
 	if opt == 1:
             try:
                 ri.plotFFT()

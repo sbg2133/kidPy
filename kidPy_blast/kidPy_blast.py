@@ -4,28 +4,33 @@ import errno
 import struct
 import casperfpga
 import socket
+sys.path.insert(0, '/home/wizwit/kidPy')
 from roachInterface import roachInterface
 from gbeConfig import roachDownlink
 import time
 import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
-from scipy import signal
+from scipy import signal, ndimage, fftpack
+import find_kids_interactive as fk
 plt.ion()
 
+roach_ppc_ip = '192.168.40.5' + str(sys.argv[1])
+pi_ip = '192.168.40.6' + str(sys.argv[1])
+
 # load general settings
-gc = np.loadtxt("./general_config", dtype = "str")
+gc = np.loadtxt("../general_config", dtype = "str")
 firmware = gc[np.where(gc == 'FIRMWARE_FILE')[0][0]][1]
 vna_savepath = gc[np.where(gc == 'VNA_SAVEPATH')[0][0]][1] 
 targ_savepath = gc[np.where(gc == 'TARG_SAVEPATH')[0][0]][1] 
 dirfile_savepath = gc[np.where(gc == 'DIRFILE_SAVEPATH')[0][0]][1] 
 
 # load list of firmware registers (note: must manually update for different versions)
-regs = np.loadtxt("./firmware_registers", dtype = "str")
+regs = np.loadtxt("../firmware_registers", dtype = "str")
 
 # load list of network parameters
-network = np.loadtxt("./network_config", dtype = "str")
+network = np.loadtxt("../network_config", dtype = "str")
 
-# UDP packet 
+# UDP packet
 buf_size = int(network[np.where(network == 'buf_size')[0][0]][1])
 header_len = int(network[np.where(network == 'header_len')[0][0]][1])
 
@@ -43,10 +48,22 @@ test_freq = np.array([test_freq])
 FC2 = 12346
 FC1 = 12345
 
+# parameters for freq search
+smoothing_scale = np.float(gc[np.where(gc == 'smoothing_scale')[0][0]][1])
+peak_threshold = np.float(gc[np.where(gc == 'peak_threshold')[0][0]][1])
+spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
+
+def getFPGA():
+    try:
+	fpga = casperfpga.katcp_fpga.KatcpFpga(roach_ppc_ip, timeout = 120.)
+    except (RuntimeError, AttributeError):
+	print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check network config."
+    return fpga
+
 def piSocket(port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(5)
-    server_address = (network[np.where(network == 'pi_ip')[0][0]][1], port)
+    server_address = (pi_ip, port)
     #print >> sys.stderr, 'connecting to %s port %s' % server_address
     try:
         sock.connect(server_address)
@@ -56,7 +73,7 @@ def piSocket(port):
 	if errorcode==errno.ECONNREFUSED:
 	    pass
     return
-    
+
 def piSendRecv(sock, message, recv = True):
     try:
         message += '\n'
@@ -81,8 +98,8 @@ def testPiConn(sock):
 def testRoachConn(fpga):
     if not fpga:
         try:
-	    fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
-        except RuntimeError:
+	    fpga = casperfpga.katcp_fpga.KatcpFpga(roach_ppc_ip, timeout = 3.)
+        except (RuntimeError, AttributeError):
 	    print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check network config."
     return fpga
 
@@ -174,7 +191,7 @@ def calibrateADC(target_rms_mv, pi, outAtten, inAtten):
 caption1 = '\n\t\033[95mKID-PY ROACH2 Readout\033[95m'
 caption2 = '\n\t\033[94mThese functions require UDP streaming to be active\033[94m'
 captions = [caption1, caption2]
-main_opts= ['Test connection to Pi', 'Test connection to Roach', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate resonances','Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan (phase)','Exit'] 
+main_opts= ['Test connection to Pi', 'Test connection to Roach', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate resonances','Write found freqs', 'Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan','Exit'] 
 
 def vnaSweep(ri, udp, pi, write = False, Navg = 50):
     if not os.path.exists(vna_savepath):
@@ -266,9 +283,8 @@ def plotVNASweep(path):
     I = np.reshape(np.transpose(Is),(len(Is[0])*len(sweep_freqs)))
     mag = np.sqrt(I**2 + Q**2)
     mag = 20*np.log10(mag/np.max(mag))
-    mag = np.concatenate((mag[len(mag)/2:],mag[:len(mag)/2]))
+    mag = np.hstack(mag)
     rf_freqs = np.hstack(rf_freqs)
-    rf_freqs = np.concatenate((rf_freqs[len(rf_freqs)/2:],rf_freqs[:len(rf_freqs)/2]))
     plt.plot(rf_freqs, mag)
     plt.title(path, size = 16)
     plt.xlabel('frequency (MHz)', size = 16)
@@ -321,6 +337,8 @@ def getSystemState(fpga, ri, udp, pi):
     print "ADC and attenuator levels:"
     #outAtten, inAtten = readAtten()
     rmsI, rmsQ, crest_factor_I, crest_factor_Q = ri.rmsVoltageADC()
+    print "ADC V_rms (I,Q):", rmsI, "mV", rmsQ, "mV"
+    print "Crest factor (I,Q):", crest_factor_I, "dB", crest_factor_Q, "dB"
     try:
         outAtten, inAtten = readAttenPi(pi)
         print "in atten:", inAtten, "dB"
@@ -420,7 +438,7 @@ def main_opt(fpga, ri, udp, pi, upload_status, name, build_time):
 		break
 	    fpga.write_int(regs[np.where(regs == 'accum_len_reg')[0][0]][1], ri.accum_len - 1)
             time.sleep(0.1)
-            ri.lpf(ri.boxcar)
+            #ri.lpf(ri.boxcar)
             if (ri.qdrCal() < 0):
 	        print '\033[93mQDR calibration failed... Check FPGA clock source\033[93m'
                 break
@@ -437,7 +455,7 @@ def main_opt(fpga, ri, udp, pi, upload_status, name, build_time):
 	        print "\nROACH link is down"
 		break
             try:
-	        prompt = raw_input('Full test comb (N = 1000) ? y/n) ')
+	        prompt = raw_input('Full test comb? y/n ')
                 if prompt == 'y':
                     ri.makeFreqComb()
 		    setAttenPi(pi, 30, 20)
@@ -544,24 +562,48 @@ def main_opt(fpga, ri, udp, pi, upload_status, name, build_time):
             if prompt == 'y':
                 try:
                     vnaSweep(ri, udp, pi, write = True)
+                    plotVNASweep(str(np.load("last_vna_dir.npy")))
                 except KeyboardInterrupt:
                     pass
             if prompt == 'n':
                 try:
                     vnaSweep(ri, udp, pi)
+                    plotVNASweep(str(np.load("last_vna_dir.npy")))
                 except KeyboardInterrupt:
                     pass
             plotVNASweep(str(np.load("last_vna_dir.npy")))
         if opt == 12:
+            try:
+                path = str(np.load("last_vna_dir.npy"))
+		print "Sweep path:", path
+		fk.main(path, center_freq, lo_step, smoothing_scale, peak_threshold, spacing_threshold)
+	        #findFreqs(str(np.load("last_vna_dir.npy")), plot = True)
+            except KeyboardInterrupt:
+	        break
+        if opt == 13:
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
-            path = ""
-            try:
-	        fk.main(path)
-            except KeyboardInterrupt:
+	    try:
+                freq_comb = np.load(os.path.join(str(np.load('last_vna_dir.npy')), 'bb_targ_freqs.npy'))
+	        freq_comb = freq_comb[freq_comb != 0]
+	        freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
+	        ri.freq_comb = (freq_comb/1.0e6) - center_freq*1.0e6
+                print ri.freq_comb
+                ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)
+                print "RF tones =", ri.upconvert
+                if len(ri.freq_comb) > 400:
+                    fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)    
+                    time.sleep(0.1)
+                else:
+                    fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**9 -1)    
+                    time.sleep(0.1)
+                ri.writeQDR(ri.freq_comb)
+		#setAtten(27, 17)
+                np.save("last_freq_comb.npy", ri.freq_comb)
+	    except KeyboardInterrupt:
 	        pass
-        if opt == 13:
+        if opt == 14:
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
@@ -577,7 +619,7 @@ def main_opt(fpga, ri, udp, pi, upload_status, name, build_time):
                 except KeyboardInterrupt:
                     pass
             plotTargSweep(str(np.load("last_targ_dir.npy")))
-        if opt == 14:
+        if opt == 15:
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
@@ -587,16 +629,17 @@ def main_opt(fpga, ri, udp, pi, upload_status, name, build_time):
                 plotPhasePSD(chan, udp, ri, time_interval)
             except KeyboardInterrupt:
                 pass
-        if opt == 15:
+        if opt == 16:
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
             time_interval = input('Time interval (s) ? ')
             try:
                 udp.saveDirfile_chanRange(time_interval)
+                udp.saveDirfile_chanRangeIQ(time_interval)
             except KeyboardInterrupt:
                 pass
-        if opt == 16:
+        if opt == 17:
             sys.exit()
         return upload_status
     
@@ -617,41 +660,45 @@ def plot_opt(ri):
             try:
                 ri.plotADC()
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
         if opt == 1:
             try:
                 ri.plotFFT()
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
         if opt == 2:
             chan = input('Channel = ? ')
             try:
-                ri.plotMixer(chan)
+                ri.plotMixer(chan, fir = False)
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
         if opt == 3:
             try:
                 ri.plotAccum()
             except KeyboardInterrupt:
-                pass
+                fig = plt.gcf()
+                plt.close(fig)
     return
 
 def main():
     pi = None
     s = None
     try:
-        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
-    except RuntimeError:
+        fpga = casperfpga.katcp_fpga.KatcpFpga(roach_ppc_ip, timeout = 3.)
+    except (RuntimeError, AttributeError):
         fpga = None
     
     # UDP socket
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
 
     # Roach interface
-    ri = roachInterface(fpga, gc, regs)
+    ri = roachInterface(fpga, gc, regs, None)
 
     # GbE interface
-    udp = roachDownlink(fpga, regs, network, s, ri.accum_freq)
+    udp = roachDownlink(ri, fpga, gc, regs, network, s, ri.accum_freq)
     udp.configSocket()
     
     #os.system('clear')
@@ -681,17 +728,17 @@ def main():
 
 def plot_main():
     try:
-        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
-    except RuntimeError:
+        fpga = casperfpga.katcp_fpga.KatcpFpga(roach_ppc_ip, timeout = 3.)
+    except (RuntimeError, AttributeError):
         fpga = None
     # Roach interface
-    ri = roachInterface(fpga, gc, regs)
+    ri = roachInterface(fpga, gc, regs, None)
     while 1:
         plot_opt(ri)
     return
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 2:
         plot_main()
     else:
-       main()
+        main()
