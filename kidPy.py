@@ -44,6 +44,13 @@ smoothing_scale = np.float(gc[np.where(gc == 'smoothing_scale')[0][0]][1])
 peak_threshold = np.float(gc[np.where(gc == 'peak_threshold')[0][0]][1])
 spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
 
+def getFPGA():
+    try:
+	fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
+    except RuntimeError:
+	print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check network config."
+    return fpga
+    
 def testConn(fpga):
     if not fpga:
         try:
@@ -287,10 +294,10 @@ def getSystemState(fpga, ri, udp, valon):
     print "UDP dest IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_destip_reg')[0][0]][1]))), ":", fpga.read_int(regs[np.where(regs == 'udp_destport_reg')[0][0]][1])
     print
     print "ADC and attenuator levels:"
-    outAtten, inAtten = readAtten()
+    #outAtten, inAtten = readAtten()
     rmsI, rmsQ, crest_factor_I, crest_factor_Q = ri.rmsVoltageADC()
-    print "in atten:", inAtten, "dB"
-    print "out atten:", outAtten, "dB"
+    #print "in atten:", inAtten, "dB"
+    #print "out atten:", outAtten, "dB"
     print "ADC V_rms (I,Q):", rmsI, "mV", rmsQ, "mV"
     print "Crest factor (I,Q):", crest_factor_I, "dB", crest_factor_Q, "dB"
     print
@@ -500,9 +507,9 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	        print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
 		break
 	    fpga.write_int(regs[np.where(regs == 'accum_len_reg')[0][0]][1], ri.accum_len - 1)
-	    fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], int(gc[np.where(gc == 'dds_shift')[0][0]][1]))
+	    #fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], int(gc[np.where(gc == 'dds_shift')[0][0]][1]))
             time.sleep(0.1)
-            ri.lpf(ri.hanning)
+            #ri.lpf(ri.boxcar)
             if (ri.qdrCal() < 0):
 	        print '\033[93mQDR calibration failed... Check FPGA clock source\033[93m'
                 break
@@ -699,7 +706,9 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 		break
             time_interval = input('Time interval (s) ? ')
             try:
-                udp.saveDirfile_chanRange(time_interval)
+                #udp.saveDirfile_chanRange(time_interval)
+                udp.saveDirfile_chanRangeIQ(time_interval)
+		#udp.saveDirfile_adcIQ(time_interval)
             except KeyboardInterrupt:
                 pass
         if opt == 16:
@@ -723,9 +732,10 @@ def plot_opt(ri):
             try:
                 ri.plotADC()
             except KeyboardInterrupt:
-                fig = plt.gcf()
-                plt.close(fig)
-        if opt == 1:
+                #fig = plt.gcf()
+                #plt.close(fig)
+                pass
+	if opt == 1:
             try:
                 ri.plotFFT()
             except KeyboardInterrupt:
@@ -734,7 +744,7 @@ def plot_opt(ri):
         if opt == 2:
             chan = input('Channel = ? ')
             try:
-                ri.plotMixer(chan)
+                ri.plotMixer(chan, fir = False)
             except KeyboardInterrupt:
                 fig = plt.gcf()
                 plt.close(fig)
@@ -766,7 +776,7 @@ def main():
     ri = roachInterface(fpga, gc, regs, valon)
 
     # GbE interface
-    udp = roachDownlink(fpga, regs, network, s, ri.accum_freq)
+    udp = roachDownlink(ri, fpga, gc, regs, network, s, ri.accum_freq)
     udp.configSocket()
     
     os.system('clear')

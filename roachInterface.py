@@ -150,21 +150,25 @@ class roachInterface(object):
         	out[n] = a
 	return out	
 
-    def read_mixer_snaps(self, chan, mixer_out = True):
+    def read_mixer_snaps(self, chan, mixer_out = True, fir = True):
      	if (chan % 2) > 0: # if chan is odd
             self.fpga.write_int(self.regs[np.where(self.regs == 'DDC_chan_sel_reg')[0][0]][1], (chan - 1) / 2)
         else:
             self.fpga.write_int(self.regs[np.where(self.regs == 'DDC_chan_sel_reg')[0][0]][1], chan/2)
         self.fpga.write_int(self.regs[np.where(self.regs == 'DDC_fftbin_ctrl_reg')[0][0]][1], 0)
         self.fpga.write_int(self.regs[np.where(self.regs == 'DDC_mixerout_ctrl_reg')[0][0]][1], 0)
-	self.fpga.write_int(self.regs[np.where(self.regs == 'fir_snap_ctrl_reg')[0][0]][1], 0)
+	if fir:
+	    self.fpga.write_int(self.regs[np.where(self.regs == 'fir_snap_ctrl_reg')[0][0]][1], 0)
+	    self.fpga.write_int(self.regs[np.where(self.regs == 'fir_snap_ctrl_reg')[0][0]][1], 1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'DDC_fftbin_ctrl_reg')[0][0]][1], 1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'DDC_mixerout_ctrl_reg')[0][0]][1], 1)
-	self.fpga.write_int(self.regs[np.where(self.regs == 'fir_snap_ctrl_reg')[0][0]][1], 1)
         mixer_in = np.fromstring(self.fpga.read(self.regs[np.where(self.regs == 'DDC_fftbin_bram_reg')[0][0]][1], 16*2**14),dtype='>i2').astype('float')
         if mixer_out:
             mixer_out = np.fromstring(self.fpga.read(self.regs[np.where(self.regs == 'DDC_mixerout_bram_reg')[0][0]][1], 8*2**14),dtype='>i2').astype('float')
-	    lpf_out = np.fromstring(self.fpga.read(self.regs[np.where(self.regs == 'DDC_fftbin_bram_reg')[0][0]][1], 8*2**14),dtype='>i2').astype('float')
+	    if fir:
+	        lpf_out = np.fromstring(self.fpga.read(self.regs[np.where(self.regs == 'DDC_fftbin_bram_reg')[0][0]][1], 8*2**14),dtype='>i2').astype('float')
+	    else:
+                lpf_out = []
             return mixer_in, mixer_out, lpf_out
         else:
             return mixer_in
@@ -187,8 +191,11 @@ class roachInterface(object):
         else:
             return mixer_in
     
-    def mixer_comp(self, chan, I0 = True):
-	mixer_in, mixer_out, lpf = self.read_mixer_snaps(chan)
+    def mixer_comp(self, chan, I0 = True, fir = True):
+	if fir:
+	    mixer_in, mixer_out, lpf = self.read_mixer_snaps(chan)
+	else:
+	    mixer_in, mixer_out, __ = self.read_mixer_snaps(chan, fir = False)
 	if I0:
 		I_in = mixer_in[0::8]
 		Q_in = mixer_in[1::8]
@@ -196,8 +203,12 @@ class roachInterface(object):
 		Q_dds_in = mixer_in[3::8]
 		I_out = mixer_out[0::4]
 		Q_out = mixer_out[1::4]
-		I_lpf = lpf[0::4]
-		Q_lpf = lpf[1::4]
+		if fir:
+		    I_lpf = lpf[0::4]
+		    Q_lpf = lpf[1::4]
+	        else:
+		    I_lpf = []
+		    Q_lpf = []
 	else:
 		I_in = mixer_in[4::8]
 		Q_in = mixer_in[5::8]
@@ -205,8 +216,12 @@ class roachInterface(object):
 		Q_dds_in = mixer_in[7::8]
 		I_out = mixer_out[2::4]
 		Q_out = mixer_out[3::4]
-		I_lpf = lpf[2::4]
-		Q_lpf = lpf[3::4]
+		if fir:
+		    I_lpf = lpf[2::4]
+		    Q_lpf = lpf[3::4]
+		else:
+		    I_lpf = []
+		    Q_lpf = []
 	return I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf 
 
     def plotBin(self, chan):
@@ -542,11 +557,34 @@ class roachInterface(object):
             adc *= 550.
             I = np.hstack(zip(adc[0::4],adc[2::4]))
             Q = np.hstack(zip(adc[1::4],adc[3::4]))
-            line1.set_ydata(I)
+	    #Ipp = np.abs(np.max(I) - np.min(I)) 
+	    #Qpp = np.abs(np.max(Q) - np.min(Q))
+            #print Ipp, Qpp
+	    line1.set_ydata(I)
             line2.set_ydata(Q)
             fig.canvas.draw()
             count += 1
         return
+
+    def adcIQ(self):
+	self.fpga.write_int(self.regs[np.where(self.regs == 'adc_snap_ctrl_reg')[0][0]][1],0)
+        time.sleep(0.1)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'adc_snap_ctrl_reg')[0][0]][1],1)
+        time.sleep(0.1)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'adc_snap_ctrl_reg')[0][0]][1],0)    
+        time.sleep(0.1)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'adc_snap_trig_reg')[0][0]][1],0)    
+        time.sleep(0.1)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'adc_snap_trig_reg')[0][0]][1],1)    
+        time.sleep(0.1)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'adc_snap_trig_reg')[0][0]][1],0)
+        time.sleep(0.1)
+        adc = (np.fromstring(self.fpga.read(self.regs[np.where(self.regs == 'adc_snap_bram_reg')[0][0]][1],(2**10)*8),dtype='>h')).astype('float')
+        adc /= (2**15 - 1)
+        adc *= 550.
+        I = np.hstack(zip(adc[0::4],adc[2::4]))
+        Q = np.hstack(zip(adc[1::4],adc[3::4]))
+        return I, Q
 
     def rmsVoltageADC(self):
         self.fpga.write_int(self.regs[np.where(self.regs == 'adc_snap_ctrl_reg')[0][0]][1],0)
@@ -594,8 +632,11 @@ class roachInterface(object):
         stop = 10000
         while(count < stop):
             I, Q = self.read_accum_snap()
+	    I = I[2:]
+	    Q = Q[2:]
             mags =(np.sqrt(I**2 + Q**2))[:1016]
-            #mags = np.concatenate((mags[len(mags)/2:],mags[:len(mags)/2]))
+            print np.arctan2(Q,I)[0]
+	    #mags = np.concatenate((mags[len(mags)/2:],mags[:len(mags)/2]))
             mags = 20*np.log10(mags/np.max(mags))
             line1.set_ydata(mags)
             fig.canvas.draw()
@@ -634,7 +675,7 @@ class roachInterface(object):
             count += 1
         return
 
-    def plotMixer(self, chan):
+    def plotMixer(self, chan, fir = False):
         t = np.linspace(0, 16384*2.0e-6, 16384)
         plt.ion()
         fig = plt.figure(figsize=(20,12))
@@ -665,29 +706,37 @@ class roachInterface(object):
         plt.xlim(0, 0.002)
         plt.ylim((-0.3,0.3))
         plt.grid()
-        plot4 = fig.add_subplot(414)
-        plt.title('FIR out', size = 16)
-        line7, = plot4.plot(t, np.zeros(16384), label = 'I fir', color = 'red', linewidth = 1)
-        line8, = plot4.plot(t, np.zeros(16384), label = 'Q fir', color = 'blue', linewidth = 1)
-        plt.xlim(0,0.002)
-        plt.ylim((-0.1,0.1))
-        plt.grid()
+        if fir:
+	    plot4 = fig.add_subplot(414)
+            plt.title('FIR out', size = 16)
+            line7, = plot4.plot(t, np.zeros(16384), label = 'I fir', color = 'red', linewidth = 1)
+            line8, = plot4.plot(t, np.zeros(16384), label = 'Q fir', color = 'blue', linewidth = 1)
+            plt.xlim(0,0.002)
+            plt.ylim((-0.1,0.1))
+            plt.grid()
         plt.tight_layout()
         count = 0
         stop = 10000
         while (count < stop):
             if (chan % 2) > 0:
-            	I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan, I0 = False)
-            else:
-            	I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan)
+            	if fir:
+		    I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan, I0 = False)
+                else:
+		    I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, __, __ = self.mixer_comp(chan, I0 = False, fir = False)
+	    else:
+            	if fir:
+		    I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan)
+		else:
+		    I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, __, __ = self.mixer_comp(chan, fir = False)
             line1.set_ydata(I_in/(2**15))
             line2.set_ydata(Q_in/(2**15))
             line3.set_ydata((I_dds_in)/(2**15))
             line4.set_ydata((Q_dds_in)/(2**15))
             line5.set_ydata(I_out/(2**14))
             line6.set_ydata(Q_out/(2**14))
-            line7.set_ydata(I_lpf/(2**14))
-            line8.set_ydata(Q_lpf/(2**14))
+            if fir:
+	        line7.set_ydata(I_lpf/(2**14))
+                line8.set_ydata(Q_lpf/(2**14))
             fig.canvas.draw()
             count += 1
         return

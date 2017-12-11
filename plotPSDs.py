@@ -38,6 +38,24 @@ dirfile = "/home/user1/blastFall2017/blastSummer2017/kidPy/data/R2_492_60_tf/151
 dirfile = "/home/user1/blastFall2017/blastSummer2017/kidPy/data/R3_492_60_tf/1510345172-Nov-10-2017-13-19-32.dir"
 dirfile = "/home/user1/blastFall2017/blastSummer2017/kidPy/data/R4_492_60_nt/1510347740-Nov-10-2017-14-02-20.dir"
 
+dirfile = "/media/user1/FREE/eee505_project_data/nofir_300s_500outof1000/1511898326-Nov-28-2017-12-45-26.dir"
+#dirfile = "/media/user1/FREE/eee505_project_data/nofir_300s_499to999/1511899221-Nov-28-2017-13-00-21.dir"
+dirfile = "/media/user1/FREE/eee505_project_data/300s_500_heatsinks/1511908164-Nov-28-2017-15-29-24.dir"
+dirfile = "/media/user1/FREE/eee505_project_data/100s_500/1511909093-Nov-28-2017-15-44-53.dir"
+dirfile = "/media/user1/FREE/eee505_project_data/100s_500_extclock/1511909809-Nov-28-2017-15-56-49.dir"
+dirfile = "/media/user1/FREE/eee505_project_data/100s_500_extclock/1511910213-Nov-28-2017-16-03-33.dir"
+dirfile = "/media/user1/FREE/eee505_project_data/100s_500_extclock/1511910847-Nov-28-2017-16-14-07.dir"
+# 4 fans
+dirfile = "/media/user1/FREE/eee505_project_data/1chan_4fans/1512342995-Dec-03-2017-16-16-35.dir" 
+dirfile = "/media/user1/FREE/eee505_project_data/1chan_4fans/1512343235-Dec-03-2017-16-20-35.dir" 
+dirfile = "/media/user1/FREE/eee505_project_data/1chan_4fans/1512343740-Dec-03-2017-16-29-00.dir" 
+dirfile = "/media/user1/FREE/eee505_project_data/1chan_4fans/1512344729-Dec-03-2017-16-45-29.dir" 
+dirfile = "/media/user1/FREE/eee505_project_data/1chan_4fans/1512345186-Dec-03-2017-16-53-06.dir" 
+# 3 fans
+#dirfile = "/media/user1/FREE/eee505_project_data/1chan_3fans/1512344231-Dec-03-2017-16-37-11.dir" 
+
+
+
 firstframe = 0
 firstsample = 0
 d = gd.dirfile(dirfile, gd.RDWR|gd.UNENCODED)
@@ -50,7 +68,7 @@ pfiles = [s for s in vectors if s[0] == "c"]
 def phase_PSD(plot = False):
     wn = []
     if plot:
-        plt.figure(figsize = (10.24, 7.68), dpi = 100)
+        plt.figure()
         plt.suptitle(r' $S_{\phi \phi}$', size = 18)
         ax = plt.gca()
         ax.set_xscale('log')
@@ -73,14 +91,17 @@ def phase_PSD(plot = False):
             Spp = 10*np.log10(Spp) 
 	    mean_wn = np.mean(Spp[3*len(Spp)/4:])
 	    if plot:
-	         ax.plot(f, Spp, linewidth = 1, alpha = 0.7)
+	         ax.plot(f, Spp, linewidth = 1)
             wn.append(mean_wn)
+	    plt.tight_layout()
     d.close()
     return np.array(wn)
 
 wn = phase_PSD(plot = True)
-plt.figure(figsize = (10.24, 7.68), dpi = 100)
+plt.figure()
 plt.plot(wn)
 plt.scatter(range(len(wn)), wn)
 plt.xlabel('Chan', size = 18)
 plt.ylabel('dBc/Hz', size = 18)
+plt.grid()
+plt.tight_layout()

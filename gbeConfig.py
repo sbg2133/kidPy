@@ -9,8 +9,10 @@ import pygetdata as gd
 
 class roachDownlink(object):
 
-    def __init__(self, fpga, regs, network, socket, data_rate):
+    def __init__(self, ri, fpga, gc, regs, network, socket, data_rate):
+	self.ri = ri
 	self.fpga = fpga
+	self.gc = gc
 	self.regs = regs
 	self.network = network
         self.s = socket
@@ -215,11 +217,44 @@ class roachDownlink(object):
 	        continue
         return
 
+    def saveDirfile_adcIQ(self, time_interval):
+        data_path = self.gc[np.where(self.gc == 'DIRFILE_SAVEPATH')[0][0]][1] 
+	sub_folder = raw_input("Insert subfolder name (e.g. single_tone): ")
+	Npackets = np.ceil(time_interval * self.data_rate)
+	Npackets = np.int(np.ceil(Npackets/1024.))
+	save_path = os.path.join(data_path, sub_folder)
+	if not os.path.exists(save_path):
+	    os.makedirs(save_path)
+        filename = save_path + '/' + \
+                   str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
+        # make the dirfile
+        d = gd.dirfile(filename,gd.CREAT|gd.RDWR|gd.UNENCODED)
+        d.add_spec('IADC RAW FLOAT32 1')
+        d.add_spec('QADC RAW FLOAT32 1')
+	d.close()
+        d = gd.dirfile(filename,gd.RDWR|gd.UNENCODED)
+        i_file = open(filename + "/IADC", "ab")
+        q_file = open(filename + "/QADC", "ab")
+	count = 0
+	while count < Npackets:
+	    I, Q = self.ri.adcIQ()
+	    for i in range(len(I)):
+		i_file.write(struct.pack('<f', I[i]))
+		q_file.write(struct.pack('<f', Q[i]))
+	        i_file.flush()
+	        q_file.flush()
+		d.flush()
+	    count += 1
+	i_file.close()
+	q_file.close()
+	d.close()
+	return
+
     def saveDirfile_chanRange(self, time_interval, stage_coords = False):
 	start_chan = input("Start chan # ? ")
 	end_chan = input("End chan # ? ")
 	chan_range = range(start_chan, end_chan + 1)
-        data_path = "./data"
+        data_path = self.gc[np.where(self.gc == 'DIRFILE_SAVEPATH')[0][0]][1] 
 	sub_folder = raw_input("Insert subfolder name (e.g. single_tone): ")
 	Npackets = np.ceil(time_interval * self.data_rate)
 	self.zeroPPS()
@@ -265,6 +300,70 @@ class roachDownlink(object):
 	    count += 1
         for idx in range(len(fo_phase)):
 	     fo_phase[idx].close()
+	fo_time.close()
+	fo_count.close()
+        d.close()
+        return 
+
+    def saveDirfile_chanRangeIQ(self, time_interval, stage_coords = False):
+	start_chan = input("Start chan # ? ")
+	end_chan = input("End chan # ? ")
+	chan_range = range(start_chan, end_chan + 1)
+        data_path = self.gc[np.where(self.gc == 'DIRFILE_SAVEPATH')[0][0]][1] 
+	sub_folder = raw_input("Insert subfolder name (e.g. single_tone): ")
+	Npackets = int(np.ceil(time_interval * self.data_rate))
+	self.zeroPPS()
+        save_path = os.path.join(data_path, sub_folder)
+	if not os.path.exists(save_path):
+	    os.makedirs(save_path)
+        filename = save_path + '/' + \
+                   str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
+	print filename
+        # make the dirfile
+        d = gd.dirfile(filename,gd.CREAT|gd.RDWR|gd.UNENCODED)
+        # add fields
+        I_fields = []
+        Q_fields = []
+        for chan in chan_range:
+            I_fields.append('I_' + str(chan))
+            Q_fields.append('Q_' + str(chan))
+            d.add_spec('I_' + str(chan) + ' RAW FLOAT64 1')
+            d.add_spec('Q_' + str(chan) + ' RAW FLOAT64 1')
+	d.close()
+        d = gd.dirfile(filename,gd.RDWR|gd.UNENCODED)
+        nfo_I = map(lambda z: filename + "/I_" + str(z), chan_range)
+        nfo_Q = map(lambda z: filename + "/Q_" + str(z), chan_range)
+	fo_I = map(lambda z: open(z, "ab"), nfo_I)
+	fo_Q = map(lambda z: open(z, "ab"), nfo_Q)
+        fo_time = open(filename + "/time", "ab")
+  	fo_count = open(filename + "/packet_count", "ab")	
+	count = 0
+	while count < Npackets:
+	    ts = time.time()
+	    try:
+	        packet, data, header, saddr = self.parsePacketData()
+		if not packet:
+		    continue
+            #### Add field for stage coords ####
+	    except TypeError:
+	        continue
+            packet_count = (np.fromstring(packet[-4:],dtype = '>I'))
+            idx = 0
+	    for chan in range(start_chan, end_chan + 1):
+	        I, Q, __ = self.parseChanData(chan, data)
+	        fo_I[idx].write(struct.pack('d', I))
+	        fo_Q[idx].write(struct.pack('d', Q))
+	        fo_I[idx].flush()
+	        fo_Q[idx].flush()
+		idx += 1
+	    fo_count.write(struct.pack('L',packet_count))
+	    fo_count.flush()
+	    fo_time.write(struct.pack('d', ts))
+	    fo_time.flush()
+	    count += 1
+        for idx in range(len(fo_I)):
+	     fo_I[idx].close()
+	     fo_Q[idx].close()
 	fo_time.close()
 	fo_count.close()
         d.close()
