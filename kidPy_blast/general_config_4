@@ -1,0 +1,36 @@
+FIRMWARE_FILE ./stable_ctime_v4_2017_Dec_15_1351.fpg
+
+VNA_SAVEPATH ./sweeps/vna
+TARG_SAVEPATH ./sweeps/targ
+
+DIRFILE_SAVEPATH ./data
+
+dds_shift 318
+freq_list 250um_array.npy
+lo_step 1.0e3
+center_freq 828.0
+Nfreq 1000
+max_pos_freq 246.001234e6
+min_pos_freq 1.02342e6
+max_neg_freq -1.02342e6
+min_neg_freq -246.001234e6
+symm_offset 250.0e3
+test_freq 10.0125e6
+
+smoothing_scale 5.0e6
+peak_threshold 6
+spacing_threshold 20.
+
+roach_ppc_ip 192.168.40.54
+valon_comm_port /dev/ttyUSB0
+udp_src_ip 192.168.40.74
+udp_src_port 60004
+udp_src_mac 02440202110C
+udp_dest_mac 000BAB7BA839
+udp_dest_ip 192.168.40.3
+udp_dest_port 60004
+udp_dest_device eth0
+buf_size 8234
+header_len 42 
+
+
