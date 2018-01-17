@@ -2,8 +2,14 @@ var_name_in_kidpy reg_name_in_firmware
 
 udp_start_reg GbE_tx_rst
 udp_destip_reg GbE_tx_destip
+udp_srcip_reg GbE_tx_srcip
 udp_destport_reg GbE_tx_destport
+udp_srcport_reg GbE_tx_srcport
 pps_start_reg GbE_pps_start
+udp_srcmac0_reg GbE_tx_srcmac0
+udp_srcmac1_reg GbE_tx_srcmac1
+udp_destmac0_reg GbE_tx_destmac0
+udp_destmac1_reg GbE_tx_destmac1
 
 fft_shift_reg PFB_fft_shift
 dds_shift_reg dds_shift

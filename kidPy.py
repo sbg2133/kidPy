@@ -13,8 +13,6 @@ from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
 plt.ion()
 
-
-
 # load general settings
 gc = np.loadtxt("./general_config", dtype = "str")
 firmware = gc[np.where(gc == 'FIRMWARE_FILE')[0][0]][1]
@@ -25,14 +23,9 @@ dirfile_savepath = gc[np.where(gc == 'DIRFILE_SAVEPATH')[0][0]][1]
 # load list of firmware registers (note: must manually update for different versions)
 regs = np.loadtxt("./firmware_registers", dtype = "str")
 
-# load list of network parameters
-network = np.loadtxt("./network_config", dtype = "str")
-
-roach_ppc_ip = getbyhostname()
-pi_ip = getbyhostname()
-
-buf_size = int(network[np.where(network == 'buf_size')[0][0]][1])
-header_len = int(network[np.where(network == 'header_len')[0][0]][1])
+# UDP packet
+buf_size = int(gc[np.where(gc == 'buf_size')[0][0]][1])
+header_len = int(gc[np.where(gc == 'header_len')[0][0]][1])
 
 # Valon channels
 CLOCK = 1
@@ -51,17 +44,17 @@ spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
 
 def getFPGA():
     try:
-	fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
+	fpga = casperfpga.katcp_fpga.KatcpFpga(gc[np.where(gc == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
     except RuntimeError:
-	print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check network config."
+	print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check gc config."
     return fpga
     
 def testConn(fpga):
     if not fpga:
         try:
-	    fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
+	    fpga = casperfpga.katcp_fpga.KatcpFpga(gc[np.where(gc == 'roach_ppc_ip')[0][0]][1], timeout = 3.)
         except RuntimeError:
-	    print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check network config."
+	    print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check gc config."
     return fpga
 
 # Initialize Valon settings
@@ -82,7 +75,7 @@ def initValon(valon, ext_ref = False, ref_freq = 10):
 # Return valon instance
 def getValon():
     try:
-        valon = valon_synth9.Synthesizer(network[np.where(network == 'valon_comm_port')[0][0]][1]) 
+        valon = valon_synth9.Synthesizer(gc[np.where(gc == 'valon_comm_port')[0][0]][1]) 
         return valon
     except OSError:
         "Valon could not be initialized. Check comm port and power supply."
@@ -158,7 +151,7 @@ def calibrateADC(target_rms_mv, outAtten, inAtten):
 caption1 = '\n\t\033[95mKID-PY ROACH2 Readout\033[95m'
 caption2 = '\n\t\033[94mThese functions require UDP streaming to be active\033[94m'
 captions = [caption1, caption2]
-main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate freqs from VNA sweep', 'Write found freqs','Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan','Exit'] 
+main_opts= ['Test connection to ROACH', 'Upload firmware', 'Initialize system & UDP conn','Write test comb (single or multitone)', 'Write stored comb', 'Apply inverse transfer function', 'Calibrate ADC V_rms', 'Get system state','Test GbE downlink', 'Print packet info to screen (UDP)','VNA sweep and plot','Locate freqs from VNA sweep', 'Write found freqs','Target sweep and plot', 'Plot channel phase PSD (quick look)', 'Save dirfile for range of chan (phase)','Exit'] 
 
 def vnaSweep(ri, udp, valon, write = False, Navg = 80):
     if not os.path.exists(vna_savepath):
@@ -295,8 +288,8 @@ def getSystemState(fpga, ri, udp, valon):
     print "Data downlink:"
     print "Stream status: ", fpga.read_int(regs[np.where(regs == 'read_stream_status_reg')[0][0]][1])
     print "Data rate: ", ri.accum_freq, "Hz", ", " + str(np.round(buf_size * ri.accum_freq / 1.0e6, 2)) + " MB/s"
-    print "UDP source IP,port:", network[np.where(network == 'udp_source_ip')[0][0]][1], ":", network[np.where(network == 'udp_source_port')[0][0]][1]
-    print "UDP dest IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_destip_reg')[0][0]][1]))), ":", fpga.read_int(regs[np.where(regs == 'udp_destport_reg')[0][0]][1])
+    print "UDP source IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_srcip_reg')[0][0]][1]))),":", fpga.read_int(regs[np.where(regs == 'udp_srcport_reg')[0][0]][1]) 
+    print "UDP dest IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_destip_reg')[0][0]][1]))),":", fpga.read_int(regs[np.where(regs == 'udp_destport_reg')[0][0]][1])
     print
     print "ADC and attenuator levels:"
     #outAtten, inAtten = readAtten()
@@ -737,8 +730,9 @@ def plot_opt(ri):
             try:
                 ri.plotADC()
             except KeyboardInterrupt:
-                fig = plt.gcf()
-                plt.close(fig)
+                #fig = plt.gcf()
+                #plt.close(fig)
+                pass
 	if opt == 1:
             try:
                 ri.plotFFT()
@@ -763,7 +757,7 @@ def plot_opt(ri):
 def main():
     s = None
     try:
-        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
+        fpga = casperfpga.katcp_fpga.KatcpFpga(gc[np.where(gc == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
     except RuntimeError:
         fpga = None
     
@@ -772,7 +766,7 @@ def main():
 
     # Valon synthesizer instance
     try:
-        valon = valon_synth9.Synthesizer(network[np.where(network == 'valon_comm_port')[0][0]][1]) 
+        valon = valon_synth9.Synthesizer(gc[np.where(gc == 'valon_comm_port')[0][0]][1]) 
     except OSError:
         "Valon could not be initialized. Check comm port and power supply."
 
@@ -780,7 +774,7 @@ def main():
     ri = roachInterface(fpga, gc, regs, valon)
 
     # GbE interface
-    udp = roachDownlink(ri, fpga, gc, regs, network, s, ri.accum_freq)
+    udp = roachDownlink(ri, fpga, gc, regs, s, ri.accum_freq)
     udp.configSocket()
     
     os.system('clear')
@@ -803,7 +797,7 @@ def main():
 
 def plot_main():
     try:
-        fpga = casperfpga.katcp_fpga.KatcpFpga(network[np.where(network == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
+        fpga = casperfpga.katcp_fpga.KatcpFpga(gc[np.where(gc == 'roach_ppc_ip')[0][0]][1], timeout = 120.)
     except RuntimeError:
         fpga = None
     # Roach interface

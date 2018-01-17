@@ -1,11 +1,24 @@
-FIRMWARE_FILE ./ctime_120817_2017_Dec_08_1100.fpg #./stable_nofir11242017_2017_Dec_05_1113.fpg
+FIRMWARE_FILE ./stable_udp_regs.fpg
 
 VNA_SAVEPATH ./november2017/vna
 TARG_SAVEPATH ./november2017/targ
 
 DIRFILE_SAVEPATH /media/user1/FREE/eee505_project_data
 
-# Roach interface
+NETWORK PARAMS
+roach_ppc_ip 192.168.40.70
+valon_comm_port /dev/ttyUSB0
+buf_size 8234
+header_len 42 
+udp_dest_ip 192.168.41.2
+udp_dst_port 60000
+udp_src_ip 192.168.40.72
+udp_src_port 60002
+udp_src_mac  02440102110E # ASU lab R2
+udp_dest_mac 681CA2123652 # user1 eth2
+udp_dest_device eth2
+
+ROACH PARAMS
 dds_shift 318
 freq_list 250um_array.npy
 lo_step 1.0e3
@@ -21,3 +34,5 @@ test_freq 10.0125e6
 smoothing_scale 5.0e6
 peak_threshold 6
 spacing_threshold 20.
+
+

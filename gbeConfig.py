@@ -9,25 +9,35 @@ import pygetdata as gd
 
 class roachDownlink(object):
 
-    def __init__(self, ri, fpga, gc, regs, network, socket, data_rate):
+    def __init__(self, ri, fpga, gc, regs, socket, data_rate):
 	self.ri = ri
 	self.fpga = fpga
 	self.gc = gc
 	self.regs = regs
-	self.network = network
         self.s = socket
 	self.data_rate = data_rate
 	self.data_len = 8192
 	self.header_len = 42
 	self.buf_size = self.data_len + self.header_len
-        temp_ip = self.network[np.where(self.network == 'udp_dest_ip')[0][0]][1]
-	temp_ip = sock.inet_aton(temp_ip)
-	self.udp_dest_ip = struct.unpack(">L", temp_ip)[0]
+        temp_dstip = self.gc[np.where(self.gc == 'udp_dest_ip')[0][0]][1]
+	temp_dstip = sock.inet_aton(temp_dstip)
+	self.udp_dest_ip = struct.unpack(">L", temp_dstip)[0]
+        temp_srcip = self.gc[np.where(self.gc == 'udp_src_ip')[0][0]][1]
+        temp_srcip = sock.inet_aton(temp_srcip)
+        self.udp_src_ip = struct.unpack(">L", temp_srcip)[0]
+        self.udp_src_port = int(self.gc[np.where(self.gc == 'udp_src_port')[0][0]][1])
+        self.udp_dst_port = int(self.gc[np.where(self.gc == 'udp_dst_port')[0][0]][1])
+	src_mac = self.gc[np.where(self.gc == 'udp_src_mac')[0][0]][1]
+        self.udp_srcmac1 = int(src_mac[0:4], 16)
+        self.udp_srcmac0 = int(src_mac[4:], 16)
+        dest_mac = self.gc[np.where(self.gc == 'udp_dest_mac')[0][0]][1]
+        self.udp_destmac1 = int(dest_mac[0:4], 16)
+        self.udp_destmac0 = int(dest_mac[4:], 16)
 
     def configSocket(self):
         try:
 	    self.s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, self.buf_size)
-	    self.s.bind((self.network[np.where(self.network == 'udp_dest_device')[0][0]][1], 3))
+	    self.s.bind((self.gc[np.where(self.gc == 'udp_dest_device')[0][0]][1], 3))
 	except sock.error, v:
             errorcode = v[0]
             if errorcode == 19:
@@ -36,9 +46,21 @@ class roachDownlink(object):
         return
 
     def configDownlink(self):
+        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcmac0_reg')[0][0]][1], self.udp_srcmac0)
+        time.sleep(0.05)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcmac1_reg')[0][0]][1], self.udp_srcmac1)
+        time.sleep(0.05)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destmac0_reg')[0][0]][1], self.udp_destmac0)
+        time.sleep(0.05)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destmac1_reg')[0][0]][1], self.udp_destmac1)
+        time.sleep(0.05)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcip_reg')[0][0]][1], self.udp_src_ip)
+        time.sleep(0.05)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destip_reg')[0][0]][1], self.udp_dest_ip)
 	time.sleep(0.1)
-        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destport_reg')[0][0]][1], int(self.network[np.where(self.network == 'udp_dest_port')[0][0]][1]))
+        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destport_reg')[0][0]][1], self.udp_dst_port)
+	time.sleep(0.1)
+        self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcport_reg')[0][0]][1], self.udp_src_port)
 	time.sleep(0.1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_start_reg')[0][0]][1],0)
 	time.sleep(0.1)
@@ -86,7 +108,7 @@ class roachDownlink(object):
         saddr = np.fromstring(header[26:30], dtype = "<I")
         saddr = sock.inet_ntoa(saddr) # source addr
         ### Filter on source IP ###
-        if (saddr != self.network[np.where(self.network == 'udp_source_ip')[0][0]][1]):
+        if (saddr != self.gc[np.where(self.gc == 'udp_src_ip')[0][0]][1]):
             print "Non-Roach packet received"
 	    return
 	return packet, data, header, saddr
@@ -149,6 +171,7 @@ class roachDownlink(object):
             daddr = np.fromstring(header[30:34], dtype = "<I")
             daddr = sock.inet_ntoa(daddr) # dest addr
             smac = np.fromstring(header[6:12], dtype = "<B")
+            dmac = np.fromstring(header[:6], dtype = "<B")
             src = np.fromstring(header[34:36], dtype = ">H")[0]
             dst = np.fromstring(header[36:38], dtype = ">H")[0]
             ### Parse packet data ###
@@ -163,6 +186,7 @@ class roachDownlink(object):
 	        print
     	        print "Roach chan =", chan
                 print "src MAC = %x:%x:%x:%x:%x:%x" % struct.unpack("BBBBBB", smac)
+                print "dst MAC = %x:%x:%x:%x:%x:%x" % struct.unpack("BBBBBB", dmac)
     	        print "src IP : src port =", saddr,":", src
     	        print "dst IP : dst port  =", daddr,":", dst
     	        print "Roach chksum =", roach_checksum[0]

@@ -129,27 +129,6 @@ class roachInterface(object):
         print '\n************ QDR Calibrated ************'
         return 0
 
-    def rudinshapiro(self, N):
-    	"""
-    	Return first N terms of Rudin-Shapiro sequence
-   	https://en.wikipedia.org/wiki/Rudin-Shapiro_sequence
-        Confirmed correct output to N = 10000:
-        https://oeis.org/A020985/b020985.txt
-        """
-    	def hamming(x):
-        	"""
-        	Hamming weight of a binary sequence
-        	http://stackoverflow.com/a/407758/125507
-        	"""
-        	return bin(x).count('1')
-    
-   	out = np.empty(N, dtype=int)
-    	for n in xrange(N):
-        	b = hamming(n << 1 & n)
-        	a = (-1)**b
-        	out[n] = a
-	return out	
-
     def read_mixer_snaps(self, chan, mixer_out = True, fir = True):
      	if (chan % 2) > 0: # if chan is odd
             self.fpga.write_int(self.regs[np.where(self.regs == 'DDC_chan_sel_reg')[0][0]][1], (chan - 1) / 2)
@@ -337,9 +316,6 @@ class roachInterface(object):
 	    if random_phase == True:
 	    	np.random.seed()
             	phase = np.random.uniform(0., 2.*np.pi, len(k))
-	    else: 
-   		phase = -np.pi*self.rudinshapiro(len(self.freq_comb))
-		phase[phase == -np.pi] = 0	 
             if apply_transfunc:
 	    	print "Applying transfer function to DAC LUTS"
 		self.amps = self.get_transfunc()
@@ -379,12 +355,6 @@ class roachInterface(object):
 	k[ k < 0 ] += self.fft_len
 	freq_residuals = freqs - f_bin
         bin_freqs = np.unique(f_bin)
-	#print k
-	#for i in range(len(bin_freqs)):
-            # print "f_bin =", bin_freqs[i]/1.0e6
-            #for j in range(len(freqs)):
-            #    if (freqs[j] < bin_freqs[i] + nyquist) and (freqs[j] > bin_freqs[i] - nyquist):
-            #        print "\tfreq, \tf_ddc, \tch:", np.round(freqs[j]/1.0e6, 3), np.round(freq_residuals[j],3), j
 	ch = 0
         for idx in k:
 	    self.fpga.write_int(self.regs[np.where(self.regs == 'bins_reg')[0][0]][1], idx)
@@ -635,8 +605,6 @@ class roachInterface(object):
 	    I = I[2:]
 	    Q = Q[2:]
             mags =(np.sqrt(I**2 + Q**2))[:1016]
-            print np.arctan2(Q,I)[0]
-	    #mags = np.concatenate((mags[len(mags)/2:],mags[:len(mags)/2]))
             mags = 20*np.log10(mags/np.max(mags))
             line1.set_ydata(mags)
             fig.canvas.draw()
