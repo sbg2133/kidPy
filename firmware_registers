@@ -32,8 +32,14 @@ write_stream_status_reg write_stream_status
 start_dac_reg start_dac
 dac_reset_reg dac_reset
 
+switch_period_reg period
+switch_enable_reg switch_enable
+lut_idx_reg lut_idx
+qdr_switch_reg qdr_switch
 qdr0_reg qdr0_memory
 qdr1_reg qdr1_memory
+qdr2_reg qdr2_memory
+qdr3_reg qdr3_memory
 
 fft_snap_ctrl_reg fft_snap_fft_snap_ctrl
 fft_snap_bram_reg fft_snap_fft_snap_bram

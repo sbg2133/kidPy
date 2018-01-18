@@ -1,4 +1,4 @@
-FIRMWARE_FILE ./stable_udp_regs.fpg
+FIRMWARE_FILE ./stable_2qdr.fpg
 
 VNA_SAVEPATH ./november2017/vna
 TARG_SAVEPATH ./november2017/targ

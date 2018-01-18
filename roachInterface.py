@@ -35,7 +35,6 @@ import pygetdata as gd
 from sean_psd import amplitude_and_power_spectrum as sean_psd
 
 class roachInterface(object):
-    
     def __init__(self, fpga, gc, regs, valon):
 	self.gc = gc
 	self.fpga = fpga
@@ -63,6 +62,7 @@ class roachInterface(object):
         self.accum_freq = self.fpga_samp_freq / self.accum_len
 	self.I_dds = np.zeros(self.LUTbuffer_len)
 	self.freq_comb = []
+	self.write_flag = 0
     	
     def uploadfpg(self):
         print 'Connecting...'
@@ -112,8 +112,6 @@ class roachInterface(object):
         print 'DAC on'
         bFailHard = False
         calVerbosity = 1
-        qdrMemName = self.regs[np.where(self.regs == 'qdr0_reg')[0][0]][1]
-        qdrNames = [self.regs[np.where(self.regs == 'qdr0_reg')[0][0]][1],self.regs[np.where(self.regs == 'qdr1_reg')[0][0]][1]]
         print 'Fpga Clock Rate =', self.fpga.estimate_fpga_clock()
         self.fpga.get_system_information()
         results = {}
@@ -122,7 +120,7 @@ class roachInterface(object):
             mqdr = myQdr.from_qdr(qdr)
             results[qdr.name] = mqdr.qdr_cal2(fail_hard=bFailHard)
         print 'qdr cal results:',results
-        for qdrName in ['qdr0','qdr1']:
+        for qdrName in ['qdr0','qdr1', 'qdr2', 'qdr3']:
             if not results[qdr.name]:
                 print 'Calibration Failed'
                 return -1
@@ -394,8 +392,37 @@ class roachInterface(object):
         Q_lut_packed = Q_lut.astype('>i2').tostring()
 	return I_lut_packed, Q_lut_packed
         
-    def writeQDR(self, freqs, transfunc = False):
+    def getLUTidx(self):
+    # returns current lut_idx
+	lut_idx = self.fpga.read(self.regs[np.where(self.regs == 'lut_idx_reg')[0][0]][1])
+	return lut_idx
+    
+    def switchLUT(self):
+    # switches between LUT pairs
+        lut_idx = self.getLUTidx()
+	new_lut_idx = lut_idx ^ lut_idx
+	if self.write_flag:
+	    return
+	else:
+	    self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],new_lut_idx)
+	return
+
+    def enableSwitch(self, enable):
+    # 0 to disable, 1 to enable
+	self.fpga.write_int(self.regs[np.where(self.regs == 'switch_enable_reg')[0][0]][1], enable)
+        return
+    
+    def writeQDR(self, freqs, transfunc = False, LUT = 0):
     # Writes packed LUTs to QDR
+        # If writing to QDR, switch to LUT which is not being written to
+	if LUT == 0:
+	    #self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],1)
+	    qdr_mem0 = self.regs[np.where(self.regs == 'qdr0_reg')[0][0]][1]
+	    qdr_mem1 = self.regs[np.where(self.regs == 'qdr1_reg')[0][0]][1]
+        else:
+	    #self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],0)
+	    qdr_mem0 = self.regs[np.where(self.regs == 'qdr2_reg')[0][0]][1]
+	    qdr_mem1 = self.regs[np.where(self.regs == 'qdr3_reg')[0][0]][1]
 	if transfunc:
 		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = True)
 	else:
@@ -403,14 +430,19 @@ class roachInterface(object):
         self.fpga.write_int(self.regs[np.where(self.regs == 'dac_reset_reg')[0][0]][1],1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'dac_reset_reg')[0][0]][1],0)
         self.fpga.write_int(self.regs[np.where(self.regs == 'start_dac_reg')[0][0]][1],0)
-        self.fpga.blindwrite(self.regs[np.where(self.regs == 'qdr0_reg')[0][0]][1],I_lut_packed,0)
-        self.fpga.blindwrite(self.regs[np.where(self.regs == 'qdr1_reg')[0][0]][1],Q_lut_packed,0)
+	print qdr_mem0, qdr_mem1
+        self.fpga.blindwrite(qdr_mem0,I_lut_packed,0)
+        self.fpga.blindwrite(qdr_mem1,Q_lut_packed,0)
         self.fpga.write_int(self.regs[np.where(self.regs == 'start_dac_reg')[0][0]][1],1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'accum_reset_reg')[0][0]][1], 0)
         self.fpga.write_int(self.regs[np.where(self.regs == 'accum_reset_reg')[0][0]][1], 1)
 	np.save("last_freq_comb.npy", self.freq_comb)
 	self.fpga.write_int(self.regs[np.where(self.regs == 'write_comb_len_reg')[0][0]][1], len(self.freq_comb))
         print 'Done.'
+	#if LUT == 0:
+	#    self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],0)
+        #else:
+	#    self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],1)
         return 
 
     def read_accum_snap(self):

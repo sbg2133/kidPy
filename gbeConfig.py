@@ -179,6 +179,8 @@ class roachDownlink(object):
             sec_ts = (np.fromstring(packet[-12:-8],dtype = '>I')) # seconds elapsed since 'pps_start'
             fine_ts = np.round((np.fromstring(packet[-8:-4],dtype = '>I').astype('float')/256.0e6)*1.0e3,3) # milliseconds since last packet
             packet_count = (np.fromstring(packet[-4:],dtype = '>I')) # raw packet count since 'pps_start'
+	    # LUT index
+	    lut_idx = self.regs[np.where(self.regs == 'lut_idx_reg')[0][0]][1]
 	    if count > 0:
     	        if (packet_count - previous_idx != 1):
                     print "Warning: Packet index error"
@@ -193,6 +195,7 @@ class roachDownlink(object):
     	        print "PPS count =", sec_ts[0]
     	        print "Packet count =", packet_count[0]
                 print "Chan phase (deg) =", phase[0]
+                print "LUT idx =", lut_idx
             count += 1
     	    previous_idx = packet_count
         return
