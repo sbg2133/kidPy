@@ -14,8 +14,10 @@ udp_destmac1_reg GbE_tx_destmac1
 fft_shift_reg PFB_fft_shift
 dds_shift_reg dds_shift
 fir_prefix_reg FIR_h
-bins_reg bins
-load_bins_reg load_bins
+bins0_reg bins0
+bins1_reg bins1
+load_bins0_reg load_bins0
+load_bins1_reg load_bins1
 
 read_comb_len_reg read_comb_len
 write_comb_len_reg write_comb_len
@@ -32,7 +34,7 @@ write_stream_status_reg write_stream_status
 start_dac_reg start_dac
 dac_reset_reg dac_reset
 
-switch_period_reg period
+switch_period_reg switch_period
 switch_enable_reg switch_enable
 lut_idx_reg lut_idx
 qdr_switch_reg qdr_switch

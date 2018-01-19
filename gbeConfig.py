@@ -87,7 +87,7 @@ class roachDownlink(object):
             I = data[1024 + ((chan - 1) / 2)]    
             Q = data[1536 + ((chan - 1) /2)]    
         else:
-            I = data[0 + (chan/21)]    
+            I = data[0 + (chan/2)]    
             Q = data[512 + (chan/2)]    
         return I, Q, np.arctan2([Q],[I])
  
@@ -175,12 +175,12 @@ class roachDownlink(object):
             src = np.fromstring(header[34:36], dtype = ">H")[0]
             dst = np.fromstring(header[36:38], dtype = ">H")[0]
             ### Parse packet data ###
-            roach_checksum = (np.fromstring(packet[-16:-12],dtype = '>I'))
-            sec_ts = (np.fromstring(packet[-12:-8],dtype = '>I')) # seconds elapsed since 'pps_start'
-            fine_ts = np.round((np.fromstring(packet[-8:-4],dtype = '>I').astype('float')/256.0e6)*1.0e3,3) # milliseconds since last packet
-            packet_count = (np.fromstring(packet[-4:],dtype = '>I')) # raw packet count since 'pps_start'
+            roach_checksum = (np.fromstring(packet[-17:-13],dtype = '>I'))
+            sec_ts = (np.fromstring(packet[-13:-9],dtype = '>I')) # seconds elapsed since 'pps_start'
+            fine_ts = np.round((np.fromstring(packet[-9:-5],dtype = '>I').astype('float')/256.0e6)*1.0e3,3) # milliseconds since last packet
+            packet_count = (np.fromstring(packet[-5:-1],dtype = '>I')) # raw packet count since 'pps_start'
 	    # LUT index
-	    lut_idx = self.regs[np.where(self.regs == 'lut_idx_reg')[0][0]][1]
+            lut_idx = (np.fromstring(packet[-1:],dtype = '>B')) 
 	    if count > 0:
     	        if (packet_count - previous_idx != 1):
                     print "Warning: Packet index error"
@@ -195,7 +195,7 @@ class roachDownlink(object):
     	        print "PPS count =", sec_ts[0]
     	        print "Packet count =", packet_count[0]
                 print "Chan phase (deg) =", phase[0]
-                print "LUT idx =", lut_idx
+                print "LUT idx =", lut_idx[0]
             count += 1
     	    previous_idx = packet_count
         return

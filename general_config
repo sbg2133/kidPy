@@ -1,4 +1,4 @@
-FIRMWARE_FILE ./stable_2qdr.fpg
+FIRMWARE_FILE ./stable_qdr_switch_4_2018_Jan_18_1720.fpg
 
 VNA_SAVEPATH ./november2017/vna
 TARG_SAVEPATH ./november2017/targ
@@ -7,7 +7,7 @@ DIRFILE_SAVEPATH /media/user1/FREE/eee505_project_data
 
 NETWORK PARAMS
 roach_ppc_ip 192.168.40.70
-valon_comm_port /dev/ttyUSB0
+valon_comm_port /dev/ttyUSB4
 buf_size 8234
 header_len 42 
 udp_dest_ip 192.168.41.2

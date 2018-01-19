@@ -201,13 +201,13 @@ class roachInterface(object):
 		    Q_lpf = []
 	return I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf 
 
-    def plotBin(self, chan):
+    def plotBin(self, chan, comb):
 	fs = 500.0
 	#w, h = signal.freqz(zeros)
 	#freq_resp = np.concatenate((h[::-1], h))
 	#f = w*fs/(2*np.pi)
 	#freqs = np.concatenate((-f[::-1], f))
-	fig = plt.figure(figsize=(20,12))
+	fig = plt.figure(figsize=(10,10))
 	N = 16384
 	T = 1./fs
 	nyquist = 0.5*fs
@@ -215,39 +215,38 @@ class roachInterface(object):
 	neg_freqs = np.linspace(-nyquist, 0, 8192)
 	xf = np.concatenate((pos_freqs, neg_freqs))
 	#xf = np.linspace(0.0, 1.0/(2.0*T), N/2)
-	plot1 = fig.add_subplot(411)
+	plot1 = fig.add_subplot(311)
 	#plt.xticks(np.arange(-250., 250., 10))
-	#plt.title("chan " + str(chan) + ", freq = " + str(self.freq_comb[chan]/1.0e6) + " MHz", size = 12)
+	plt.title("chan " + str(chan) + ", freq = " + str(comb[chan]/1.0e6) + " MHz", size = 12)
 	line1, = plot1.plot(xf, np.zeros(N), label = 'Bin in', color = 'green', linewidth = 1)
 	plt.grid()
-	plot2 = fig.add_subplot(412)
+	plot2 = fig.add_subplot(312)
 	#plt.xticks(np.arange(-250., 250., 10))
 	plt.title("DDC", size = 12)
 	line2, = plot2.plot(xf, np.zeros(N), label = 'DDC', color = 'red', linewidth = 2)
 	plt.grid()
-	plot3 = fig.add_subplot(413)
+	plot3 = fig.add_subplot(313)
 	#plt.xticks(np.arange(-250., 250., 10))
 	plt.title('chan out = F_in - F_ddc', size = 12)
 	line3, = plot3.plot(xf, np.zeros(N), label = 'Bin out', color = 'blue', linewidth = 2)
 	plt.grid()
-	plot4 = fig.add_subplot(414)
-	line4, = plot4.plot(xf, np.zeros(N), label = 'FIR out', color = 'k', linewidth = 2)
+	#plot4 = fig.add_subplot(414)
+	#line4, = plot4.plot(xf, np.zeros(N), label = 'FIR out', color = 'k', linewidth = 2)
 	#plot4.plot(freqs, 20*np.log10(np.abs(freq_resp)/np.max(np.abs(freq_resp))), color = 'r', linewidth = 2)
-	plt.grid()
 	plt.tight_layout()
 	plt.show(block = False)
 	count = 0
 	stop = 10000
 	while (count < stop):
 		if (chan % 2) > 0:
-			I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan, I0 = False)
+			I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan, I0 = False, fir = False)
 		else:
-			I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan)
+			I_in, Q_in, I_dds_in, Q_dds_in, I_out, Q_out, I_lpf, Q_lpf = self.mixer_comp(chan, fir = False)
 		
 		sig_in = I_in + 1j*Q_in
 		ddc = I_dds_in + 1j*Q_dds_in
 		sig_out = I_out + 1j*Q_out
-		lpf = I_lpf + 1j*Q_lpf
+		#lpf = I_lpf + 1j*Q_lpf
 		fft_in = np.abs(scipy.fftpack.fft(sig_in))
 		fft_in /= np.max(fft_in)
 		fft_in = 20*np.log10(fft_in)
@@ -256,17 +255,17 @@ class roachInterface(object):
 		fft_out = np.abs(scipy.fftpack.fft(sig_out))
 		fft_out /= np.max(fft_out)
 		fft_out = 20*np.log10(fft_out)
-		lpf_fft = np.abs(scipy.fftpack.fft(lpf))
-		lpf_fft /= np.max(lpf_fft)
-		lpf_fft = 20*np.log10(lpf_fft)
+		#lpf_fft = np.abs(scipy.fftpack.fft(lpf))
+		#lpf_fft /= np.max(lpf_fft)
+		#lpf_fft = 20*np.log10(lpf_fft)
 		line1.set_ydata(fft_in) 
 		plot1.set_ylim(np.min(fft_in), 0)
 		line2.set_ydata(ddc_fft)
 		plot2.set_ylim(-0.5, 1.5)
 		line3.set_ydata(fft_out)
 		plot3.set_ylim(np.min(fft_out), 0)
-		line4.set_ydata(lpf_fft)
-		plot4.set_ylim(np.min(lpf_fft), 0)
+		#line4.set_ydata(lpf_fft)
+		#plot4.set_ylim(np.min(lpf_fft), 0)
 		fig.canvas.draw()
 		count += 1
 	return
@@ -345,25 +344,34 @@ class roachInterface(object):
         k = np.round((freqs/samp_freq)*fft_len).astype('int')
         return k
     
-    def select_bins(self, freqs):
+    def select_bins(self, freqs, LUT = 0):
     # Calculates the offset from each bin center, to be used as the DDS LUT frequencies, and writes bin numbers to RAM
+	if LUT == 0:
+	    load_bins_reg = self.regs[np.where(self.regs == 'load_bins0_reg')[0][0]][1]
+	    bins_reg = self.regs[np.where(self.regs == 'bins0_reg')[0][0]][1]
+	    self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],0)
+	else:
+	    load_bins_reg = self.regs[np.where(self.regs == 'load_bins1_reg')[0][0]][1]
+	    bins_reg = self.regs[np.where(self.regs == 'bins1_reg')[0][0]][1]
+	    self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],1)
         nyquist = 250.0e3
 	k = self.fft_bin_index(freqs, self.fft_len, 2*self.fpga_samp_freq)
         f_bin = k*self.dac_samp_freq/self.fft_len
 	k[ k < 0 ] += self.fft_len
 	freq_residuals = freqs - f_bin
-        bin_freqs = np.unique(f_bin)
+        for i in range(len(freqs)):
+		print "chan, bin, fbin, freq, offset:", i, k[i], f_bin[i]/1.0e6, freqs[i]/1.0e6, freq_residuals[i]
 	ch = 0
         for idx in k:
-	    self.fpga.write_int(self.regs[np.where(self.regs == 'bins_reg')[0][0]][1], idx)
-            self.fpga.write_int(self.regs[np.where(self.regs == 'load_bins_reg')[0][0]][1], 2*ch + 1)
-	    self.fpga.write_int(self.regs[np.where(self.regs == 'load_bins_reg')[0][0]][1], 0)
+	    self.fpga.write_int(bins_reg, idx)
+            self.fpga.write_int(load_bins_reg, 2*ch + 1)
+	    self.fpga.write_int(load_bins_reg, 0)
             ch += 1
         return freq_residuals
     
-    def define_DDS_LUT(self, freqs):
+    def define_DDS_LUT(self, freqs, LUT = 0):
     # Builds the DDS look-up-table from I and Q given by freq_comb. freq_comb is called with the sample rate equal to the sample rate for a single FFT bin. There are two bins returned for every fpga clock, so the bin sample rate is 256 MHz / half the fft length  
-        freq_residuals = self.select_bins(freqs)
+        freq_residuals = self.select_bins(freqs, LUT)
         I_dds, Q_dds = np.array([0.]*(self.LUTbuffer_len)), np.array([0.]*(self.LUTbuffer_len))
         for m in range(len(freq_residuals)):
             I, Q = self.freqComb(np.array([freq_residuals[m]]), self.fpga_samp_freq/(self.fft_len/2.), self.dac_freq_res, random_phase = False, DAC_LUT = False)
@@ -371,13 +379,13 @@ class roachInterface(object):
             Q_dds[m::self.fft_len] = Q
         return I_dds, Q_dds
     
-    def pack_luts(self, freqs, transfunc = False):
+    def pack_luts(self, freqs, transfunc = False, LUT = 0):
     # packs the I and Q look-up-tables into strings of 16-b integers, in preparation to write to the QDR. Returns the string-packed look-up-tables
         if transfunc:
 		I_dac, Q_dac = self.freqComb(freqs, self.dac_samp_freq, self.dac_freq_res, random_phase = True, apply_transfunc = True)
         else:
 		I_dac, Q_dac = self.freqComb(freqs, self.dac_samp_freq, self.dac_freq_res, random_phase = True)
-	I_dds, Q_dds = self.define_DDS_LUT(freqs)
+	I_dds, Q_dds = self.define_DDS_LUT(freqs, LUT = LUT)
 	self.I_dds = I_dds
         I_lut, Q_lut = np.zeros(self.LUTbuffer_len*2), np.zeros(self.LUTbuffer_len*2)
         I_lut[0::4] = I_dac[1::2]         
@@ -416,17 +424,15 @@ class roachInterface(object):
     # Writes packed LUTs to QDR
         # If writing to QDR, switch to LUT which is not being written to
 	if LUT == 0:
-	    #self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],1)
 	    qdr_mem0 = self.regs[np.where(self.regs == 'qdr0_reg')[0][0]][1]
 	    qdr_mem1 = self.regs[np.where(self.regs == 'qdr1_reg')[0][0]][1]
         else:
-	    #self.fpga.write_int(self.regs[np.where(self.regs == 'qdr_switch_reg')[0][0]][1],0)
 	    qdr_mem0 = self.regs[np.where(self.regs == 'qdr2_reg')[0][0]][1]
 	    qdr_mem1 = self.regs[np.where(self.regs == 'qdr3_reg')[0][0]][1]
 	if transfunc:
-		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = True)
+		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = True, LUT = LUT)
 	else:
-		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = False)
+		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = False, LUT = LUT)
         self.fpga.write_int(self.regs[np.where(self.regs == 'dac_reset_reg')[0][0]][1],1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'dac_reset_reg')[0][0]][1],0)
         self.fpga.write_int(self.regs[np.where(self.regs == 'start_dac_reg')[0][0]][1],0)
@@ -436,7 +442,6 @@ class roachInterface(object):
         self.fpga.write_int(self.regs[np.where(self.regs == 'start_dac_reg')[0][0]][1],1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'accum_reset_reg')[0][0]][1], 0)
         self.fpga.write_int(self.regs[np.where(self.regs == 'accum_reset_reg')[0][0]][1], 1)
-	np.save("last_freq_comb.npy", self.freq_comb)
 	self.fpga.write_int(self.regs[np.where(self.regs == 'write_comb_len_reg')[0][0]][1], len(self.freq_comb))
         print 'Done.'
 	#if LUT == 0:
@@ -678,7 +683,7 @@ class roachInterface(object):
     def plotMixer(self, chan, fir = False):
         t = np.linspace(0, 16384*2.0e-6, 16384)
         plt.ion()
-        fig = plt.figure(figsize=(20,12))
+        fig = plt.figure(figsize=(10,10))
         # I and Q
         plot1 = fig.add_subplot(411)
         #plot1.set_ylabel('mV')

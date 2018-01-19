@@ -55,15 +55,25 @@ def getSwitchStatus(fpga):
 
 def getLUTidx(fpga):
     idx = fpga.read_int(regs[np.where(regs == 'qdr_switch_reg')[0][0]][1])
+    time.sleep(0.01)
     return idx 
 
 def switchLUT(fpga, LUT):
     fpga.write_int(regs[np.where(regs == 'qdr_switch_reg')[0][0]][1], LUT)
     return
 
+def setSwitchPeriod(fpga, period = 1):
+    # switch must be disabled before setting switch period
+    fpga.write_int(regs[np.where(regs == 'switch_enable_reg')[0][0]][1], 0)
+    fpga.write_int(regs[np.where(regs == 'switch_period_reg')[0][0]][1], period)
+    fpga.write_int(regs[np.where(regs == 'switch_enable_reg')[0][0]][1], 1)
+    time.sleep(0.01)
+    return
+
 def enableSwitch(fpga, enable):
     # 1 for enable, 0 for disable
     fpga.write_int(regs[np.where(regs == 'switch_enable_reg')[0][0]][1], enable)
+    time.sleep(0.01)
     return
 
 def testConn(fpga):
@@ -100,7 +110,7 @@ def getValon():
 
 # For setting Valon
 def setValonLevel(dBm):
-    v = valon_synth9.Synthesizer('/dev/ttyUSB0')
+    v = valon_synth9.Synthesizer(gc[np.where(gc == 'valon_comm_port')[0][0]][1])
     v.set_rf_level(2, dBm)
     return
 
@@ -514,10 +524,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
             try:
 	        initValon(valon)
 	        print "Valon initiliazed"
-	    except OSError:
-	        print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
-		break
-	    except IndexError:
+	    except (OSError, IndexError):
 	        print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
 		break
 	    fpga.write_int(regs[np.where(regs == 'accum_len_reg')[0][0]][1], ri.accum_len - 1)
@@ -535,11 +542,14 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
             except AttributeError:
 	        print "UDP Downlink could not be configured. Check ROACH connection."
 		break
+            #set LUT switching period
+	    setSwitchPeriod(fpga, 3)
 	if opt == 3:
 	    if not fpga:
 	        print "\nROACH link is down"
 		break
             try:
+		enableSwitch(fpga, 0)
 	        prompt = raw_input('Full test comb? y/n ')
                 if prompt == 'y':
                     ri.makeFreqComb()
@@ -555,6 +565,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
                     time.sleep(0.1)
                 ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)
                 print "RF tones =", ri.upconvert
+	        np.save("last_freq_comb.npy", ri.freq_comb)
                 ri.writeQDR(ri.freq_comb)
                 if not (fpga.read_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1])):
                     if regs[np.where(regs == 'DDC_mixerout_bram_reg')[0][0]][1] in fpga.listdev():
@@ -611,11 +622,11 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
 	        print "\nROACH link is down"
 		break
 	    try:
-	        ri.freq_comb = np.load("last_freq_comb.npy")
+	        freq_comb = np.load("last_freq_comb.npy")
                 print "Writing new LUTs and enabling switching..."
 		enableSwitch(fpga, 0)
-	        ri.writeQDR(ri.freq_comb)
-	        ri.writeQDR(ri.freq_comb, LUT = 1)
+	        ri.writeQDR(freq_comb + 200.0e3, LUT = 0)
+	        ri.writeQDR(freq_comb - 200.0e3, LUT = 1)
 		enableSwitch(fpga, 1)
 	    except KeyboardInterrupt:
 	        pass
@@ -738,7 +749,7 @@ def main_opt(fpga, ri, udp, valon, upload_status, name, build_time):
         return upload_status
     
 plot_caption = '\n\t\033[95mKID-PY ROACH2 Snap Plots\033[95m'                
-plot_opts= ['I & Q ADC input','Firmware FFT','Digital Down Converter Time Domain','Downsampled Channel Magnitudes']
+plot_opts= ['I & Q ADC input','Firmware FFT','Digital Down Converter Time Domain','Downsampled Channel Magnitudes', 'DDC Freq domain']
 
 def makePlotMenu(prompt,options):
     print '\t' + prompt + '\n'
@@ -776,6 +787,14 @@ def plot_opt(ri):
             except KeyboardInterrupt:
                 fig = plt.gcf()
                 plt.close(fig)
+        if opt == 4:
+            chan = input('Channel = ? ')
+	    try:
+	        comb = np.load("last_freq_comb.npy")
+	        ri.plotBin(chan, comb)
+            except KeyboardInterrupt:
+                fig = plt.gcf()
+                #plt.close(fig)
     return
 
 def main():
