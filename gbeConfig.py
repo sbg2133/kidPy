@@ -1,3 +1,19 @@
+# This software is a work in progress. It is a console interface designed 
+# to operate the BLAST-TNG ROACH2 firmware. 
+#
+# Copyright (C) January, 2018  Gordon, Sam <sbgordo1@asu.edu>
+# Author: Gordon, Sam <sbgordo1@asu.edu>
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
 import os, sys
 import numpy as np
 import socket as sock
@@ -227,7 +243,7 @@ class roachDownlink(object):
                 print "Roach chksum =", roach_checksum[0]
                 print "PPS count =", sec_ts[0]
                 print "Packet count =", packet_count[0]
-                print "Chan phase (deg) =", phase[0]
+                print "Chan phase (rad) =", phase[0]
             count += 1
             previous_idx = packet_count
         return

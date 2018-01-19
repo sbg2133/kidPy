@@ -1,7 +1,7 @@
 # This software is a work in progress. It is a console interface designed 
 # to operate the BLAST-TNG ROACH2 firmware. 
 #
-# Copyright (C) November, 2017  Gordon, Sam <sbgordo1@asu.edu>
+# Copyright (C) January, 2018  Gordon, Sam <sbgordo1@asu.edu>
 # Author: Gordon, Sam <sbgordo1@asu.edu>
 # 
 # This program is free software: you can redistribute it and/or modify

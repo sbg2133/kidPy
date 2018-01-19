@@ -13,7 +13,7 @@ NETWORK PARAMS
 roach_ppc_ip 192.168.40.70
 
 # If you're using a Valon LO, this is the comm port (do: dmesg | grep ttyUSB)
-valon_comm_port /dev/ttyUSB0
+valon_comm_port /dev/ttyUSB4
 
 # Total UDP packet size, bytes
 buf_size 8234
@@ -37,10 +37,10 @@ udp_src_ip 192.168.40.72
 udp_src_port 60002
 
 # Roach2 MAC address (hard coded in Roach2)
-udp_src_mac  02440102110E # ASU lab R2
+udp_src_mac 02440102110E
 
 # UDP destination MAC address (you choose)
-udp_dest_mac 681CA2123652 # user1 eth2
+udp_dest_mac 681CA2123652 
 
 ROACH PARAMS
 
@@ -53,7 +53,7 @@ lo_step 1.0e3
 # LO center frequency, MHz
 center_freq 828.0
 
-DEFAULT VNA COMB PARAMS
+COMB PARAMS
 
 # Number of frequencies in test comb
 Nfreq 1000
@@ -76,7 +76,7 @@ symm_offset 250.0e3
 # A single test frequency, Hz
 test_freq 10.0125e6
 
-RESONANCE FINDING PARAMS
+RESONANCE_FINDING PARAMS
 
 # Low pass filter cutoff freq, Hz
 smoothing_scale 5.0e6

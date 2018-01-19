@@ -13,6 +13,12 @@ from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
 plt.ion()
 
+################################################################
+# Run in IPYTHON as: %run kidPy
+
+# for plotting interface, run as: %run kidPy plot
+################################################################
+
 # Load general settings
 gc = np.loadtxt("./general_config", dtype = "str")
 firmware = gc[np.where(gc == 'FIRMWARE_FILE')[0][0]][1]
@@ -716,7 +722,7 @@ def main_opt(fpga, ri, udp, valon, upload_status):
             if not fpga:
                 print "\nROACH link is down"
                 break
-           getSystemState(fpga, ri, udp, valon)
+            getSystemState(fpga, ri, udp, valon)
         if opt == 8:
             if not fpga:
                 print "\nROACH link is down"
@@ -782,7 +788,7 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 ri.writeQDR(ri.freq_comb)
                 #setAtten(27, 17)
                 np.save("last_freq_comb.npy", ri.freq_comb)
-        except KeyboardInterrupt:
+            except KeyboardInterrupt:
                 pass
         if opt == 13:
             if not fpga:
