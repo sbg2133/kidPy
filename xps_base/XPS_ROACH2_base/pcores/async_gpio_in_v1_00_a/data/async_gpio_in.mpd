@@ -1,0 +1,20 @@
+###################################################################
+##
+## File     : gpio_ext2simulink_v2_1_0.mpd
+## Desc     : Microprocessor Peripheral Description
+##
+##
+###################################################################
+
+BEGIN gpio_ext2simulink
+
+## Peripheral Options
+OPTION IPTYPE = PERIPHERAL
+OPTION HDL = VHDL
+OPTION ARCH_SUPPORT_MAP = (VIRTEX2P=PREFERRED, VIRTEX5=DEVELOPMENT, VIRTEX6=DEVELOPMENT)
+
+
+## Ports
+PORT gateway = "", DIR = O, VEC = [0:0]
+PORT io_pad = "", DIR = I, VEC = [0:0]
+END

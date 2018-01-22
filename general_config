@@ -1,10 +1,9 @@
 # Path to firmware file
-FIRMWARE_FILE ./stable_udp_regs.fpg
+FIRMWARE_FILE ./stable_ctime_v5_2018_Jan_22_1028.fpg
 
 # Path to sweep directories
 VNA_SAVEPATH ./november2017/vna
 TARG_SAVEPATH ./november2017/targ
-
 # Path for saved streaming data
 DIRFILE_SAVEPATH /media/user1/FREE/eee505_project_data
 

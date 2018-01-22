@@ -226,11 +226,13 @@ class roachDownlink(object):
             src = np.fromstring(header[34:36], dtype = ">H")[0]
             dst = np.fromstring(header[36:38], dtype = ">H")[0]
             ### Parse packet data ###
-            roach_checksum = (np.fromstring(packet[-16:-12],dtype = '>I'))
-            sec_ts = (np.fromstring(packet[-12:-8],dtype = '>I')) # seconds elapsed since 'pps_start'
-            fine_ts = np.round((np.fromstring(packet[-8:-4],dtype = '>I').astype('float')/256.0e6)*1.0e3,3) # milliseconds since last packet
-            packet_count = (np.fromstring(packet[-4:],dtype = '>I')) # raw packet count since 'pps_start'
-            if count > 0:
+            roach_checksum = (np.fromstring(packet[-20:-16],dtype = '>I'))
+            sec_ts = (np.fromstring(packet[-16:-12],dtype = '>I')) # seconds elapsed since 'pps_start'
+            fine_ts = np.round((np.fromstring(packet[-12:-8],dtype = '>I').astype('float')/256.0e6)*1.0e3,3) # milliseconds since last packet
+            packet_count = (np.fromstring(packet[-8:-4],dtype = '>I')) # raw packet count since 'pps_start'
+            packet_info_reg = (np.fromstring(packet[-4:],dtype = '>I'))
+	    
+	    if count > 0:
                 if (packet_count - previous_idx != 1):
                     print "Warning: Packet index error"
                 __, __, phase = self.parseChanData(chan, data)
@@ -244,6 +246,7 @@ class roachDownlink(object):
                 print "PPS count =", sec_ts[0]
                 print "Packet count =", packet_count[0]
                 print "Chan phase (rad) =", phase[0]
+		print "Packet info reg =", packet_info_reg[0] 
             count += 1
             previous_idx = packet_count
         return
