@@ -1,4 +1,4 @@
-FIRMWARE_FILE ./stable_qdr_switch_4_2018_Jan_18_1720.fpg
+FIRMWARE_FILE ./stable_qdr_switch_5_2018_Jan_19_1706.fpg
 
 VNA_SAVEPATH ./november2017/vna
 TARG_SAVEPATH ./november2017/targ
