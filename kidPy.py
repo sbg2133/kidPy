@@ -24,10 +24,8 @@ from roachInterface import roachInterface
 from gbeConfig import roachDownlink
 import time
 import matplotlib.pyplot as plt
-from sean_psd import amplitude_and_power_spectrum as sean_psd
 from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
-#from PSDs import allPSD as PSD
 import pygetdata as gd
 plt.ion()
 
@@ -66,6 +64,51 @@ freq_list = gc[np.where(gc == 'freq_list')[0][0]][1]
 smoothing_scale = np.float(gc[np.where(gc == 'smoothing_scale')[0][0]][1])
 peak_threshold = np.float(gc[np.where(gc == 'peak_threshold')[0][0]][1])
 spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
+
+def systemInit():
+    fpga = getFPGA
+    if not fpga:
+        print "\nROACH link is down"
+        return
+    # Valon object
+    valon = getValon()
+    # Roach PPC object
+    fpga = getFPGA()
+    # Roach interface 
+    ri = roachInterface(fpga, gc, regs, valon)
+    if (ri.uploadfpg() < 0):
+        print "\nFirmware upload failed"
+    time.sleep(0.3)
+    # UDP socket
+    s = socket(AF_PACKET, SOCK_RAW, htons(3))
+    # UDP object
+    udp = roachDownlink(ri, fpga, gc, regs, s, ri.accum_freq)
+    try:
+        initValon(valon)
+        print "Valon initiliazed"
+    except OSError:
+        print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
+        return
+    except IndexError:
+        print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
+        return
+    fpga.write_int(regs[np.where(regs == 'accum_len_reg')[0][0]][1], ri.accum_len - 1)
+    time.sleep(0.1)
+    fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], int(gc[np.where(gc == 'dds_shift')[0][0]][1]))
+    time.sleep(0.1)
+    #ri.lpf(ri.boxcar)
+    if (ri.qdrCal() < 0):
+        print '\033[93mQDR calibration failed... Check FPGA clock source\033[93m'
+        return
+    else:
+        fpga.write_int(regs[np.where(regs == 'write_qdr_status_reg')[0][0]][1], 1)
+    time.sleep(0.1)
+    try:
+        udp.configDownlink()
+    except AttributeError:
+        print "UDP Downlink could not be configured. Check ROACH connection."
+        return
+    return
 
 def getFPGA():
     """Returns a casperfpga object of the Roach2"""
@@ -228,7 +271,7 @@ def vnaSweep(ri, udp, valon):
            valon synth object valon
            bool write: Write test comb before sweeping?
            Navg = Number of data points to average at each sweep step"""
-    Navg = np.float(gc[np.where(gc == 'Navg')[0][0]][1])
+    Navg = np.int(gc[np.where(gc == 'Navg')[0][0]][1])
     if not os.path.exists(vna_savepath):
         os.makedirs(vna_savepath)
     sweep_dir = vna_savepath + '/' + \
@@ -312,7 +355,7 @@ def vnaSweepConsole():
     # UDP object
     udp = roachDownlink(ri, fpga, gc, regs, s, ri.accum_freq)
     udp.configSocket()
-    Navg = np.float(gc[np.where(gc == 'Navg')[0][0]][1])
+    Navg = np.int(gc[np.where(gc == 'Navg')[0][0]][1])
     if not os.path.exists(vna_savepath):
         os.makedirs(vna_savepath)
     sweep_dir = vna_savepath + '/' + \
@@ -511,6 +554,7 @@ def saveTimestreamDirfile(subfolder, start_chan, end_chan, time_interval):
     filename = save_path + '/' + \
                str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
     print filename
+    np.save('last_data_path.npy', filename)
     # make the dirfile
     d = gd.dirfile(filename,gd.CREAT|gd.RDWR|gd.UNENCODED)
     # add fields
@@ -642,6 +686,53 @@ def plotPhasePSD(chan, udp, ri, time_interval):
     ax.plot(f[1:], Spp, linewidth = 1, label = 'Phase', alpha = 0.7)
     plt.legend(loc = 'upper right')
     plt.grid()
+    return
+
+def plotAllPSD(dirfile): 
+    if dirfile == None:
+        dirfile = str(np.load('last_data_path.npy'))
+    firstframe = 0
+    firstsample = 0
+    d = gd.dirfile(dirfile, gd.RDWR|gd.UNENCODED)
+    print "Number of frames in dirfile =", d.nframes
+    nframes = d.nframes
+    vectors = d.field_list()
+    ifiles = [i for i in vectors if i[0] == "I"]
+    qfiles = [q for q in vectors if q[0] == "Q"]
+    ifiles.remove("INDEX")
+    wn = []
+    plt.figure()
+    plt.title(r' $S_{\phi \phi}$', size = 16)
+    ax = plt.gca()
+    ax.set_xscale('log')
+    ax.set_ylabel('dBc/Hz', size = 16)
+    ax.set_xlabel('log Hz', size = 16)
+    for n in range(len(ifiles)):
+        ivals = d.getdata(ifiles[n], gd.FLOAT32, first_frame = firstframe, first_sample = firstsample, num_frames = nframes)
+        qvals = d.getdata(qfiles[n], gd.FLOAT32, first_frame = firstframe, first_sample = firstsample, num_frames = nframes)
+        ivals = ivals[~np.isnan(ivals)]
+        Qvals = qvals[~np.isnan(qvals)]
+        f, Spp = signal.welch(np.arctan2(qvals,ivals), 488.28125)
+        Spp = Spp[Spp != 0.]
+        if not np.size(Spp):
+            mean_wn = np.nan
+            pass
+        else:
+            Spp = 10*np.log10(Spp) 
+        mean_wn = np.mean(Spp[3*len(Spp)/4:])
+    	ax.plot(f, Spp, linewidth = 1)
+        wn.append(mean_wn)
+    plt.grid()
+    plt.tight_layout()
+    d.close()
+    wn = np.array(wn)
+    plt.figure()
+    plt.plot(wn)
+    plt.scatter(range(len(wn)), wn)
+    plt.xlabel('Chan', size = 18)
+    plt.ylabel('dBc/Hz', size = 18)
+    plt.grid()
+    plt.tight_layout()
     return
 
 def filter_trace(path, bb_freqs, sweep_freqs):
@@ -852,6 +943,7 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
                 break
             fpga.write_int(regs[np.where(regs == 'accum_len_reg')[0][0]][1], ri.accum_len - 1)
+            time.sleep(0.1)
             fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], int(gc[np.where(gc == 'dds_shift')[0][0]][1]))
             time.sleep(0.1)
             #ri.lpf(ri.boxcar)
@@ -1116,9 +1208,10 @@ def plot_main():
     while 1:
         plot_opt(ri)
     return 
-
+"""
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         plot_main()
     else:
-        ri, udp, v = main()
+        main()
+"""
