@@ -64,6 +64,7 @@ class roachDownlink(object):
 
     def configDownlink(self):
         """Configure GbE parameters"""
+        """
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcmac0_reg')[0][0]][1], self.udp_srcmac0)
         time.sleep(0.05)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcmac1_reg')[0][0]][1], self.udp_srcmac1)
@@ -74,12 +75,15 @@ class roachDownlink(object):
         time.sleep(0.05)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcip_reg')[0][0]][1], self.udp_src_ip)
         time.sleep(0.05)
+        """
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destip_reg')[0][0]][1], self.udp_dest_ip)
         time.sleep(0.1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destport_reg')[0][0]][1], self.udp_dst_port)
         time.sleep(0.1)
+        """
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcport_reg')[0][0]][1], self.udp_src_port)
         time.sleep(0.1)
+        """
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_start_reg')[0][0]][1],0)
         time.sleep(0.1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_start_reg')[0][0]][1],1)
@@ -184,6 +188,8 @@ class roachDownlink(object):
         self.zeroPPS()
         Npackets = int(np.ceil(time_interval * self.data_rate))
         phases = np.zeros(Npackets)
+        Is = np.zeros(Npackets)
+        Qs = np.zeros(Npackets)
         count = 0
         while count < Npackets:
             try:
@@ -191,14 +197,16 @@ class roachDownlink(object):
                 if not packet:
                     continue
                 else:
-                    __, __, phase = self.parseChanData(chan, data)
+                    I, Q, phase = self.parseChanData(chan, data)
                     phases[count] = phase
+                    Is[count] = I
+                    Qs[count] = Q
             except TypeError:
                 continue
             if not np.size(data):
                 continue
             count += 1
-        return phases
+        return Is, Qs, phases
 
     def printChanInfo(self, chan, time_interval):
         """Parses channel info from packet and prints to screen for specified
@@ -251,7 +259,7 @@ class roachDownlink(object):
             previous_idx = packet_count
         return
 
-    def saveSweepData(self, Navg, savepath, lo_freq, Nchan, skip_packets = 2):
+    def saveSweepData(self, Navg, savepath, lo_freq, Nchan, skip_packets = 0):
         """Saves sweep data as .npy in path specified at savepath
            inputs:
                int Navg: Number of data points to average at each sweep step
@@ -268,17 +276,19 @@ class roachDownlink(object):
             try:
                 packet, data, header, saddr = self.parsePacketData()
                 if not packet:
-                    continue
+                    print "Packet error"
+                    return -1
                 if not np.size(data):
-                    continue
+                    print "Packet error"
+                    return -1
                 odd_chan = channels[1::2]
                 even_chan = channels[0::2]
                 I_odd = data[1024 + ((odd_chan - 1) / 2)]
                 Q_odd = data[1536 + ((odd_chan - 1) /2)]
                 I_even = data[0 + (even_chan/2)]
                 Q_even = data[512 + (even_chan/2)]
-                even_phase = np.arctan2(Q_even,I_even)
-                odd_phase = np.arctan2(Q_odd,I_odd)
+                #even_phase = np.arctan2(Q_even,I_even)
+                #odd_phase = np.arctan2(Q_odd,I_odd)
                 if len(channels) % 2 > 0:
                     if len(I_odd) > 0:
                         I = np.hstack(zip(I_even[:len(I_odd)], I_odd))
@@ -299,8 +309,9 @@ class roachDownlink(object):
                 np.save(os.path.join(savepath,I_file), np.mean(I_buffer[skip_packets:], axis = 0))
                 np.save(os.path.join(savepath,Q_file), np.mean(Q_buffer[skip_packets:], axis = 0))
             except TypeError:
-                continue
-        return
+                print "Packet error"
+                return -1
+        return 0
 
     def saveDirfile_adcIQ(self, time_interval):
         data_path = self.gc[np.where(self.gc == 'DIRFILE_SAVEPATH')[0][0]][1] 
@@ -463,3 +474,4 @@ class roachDownlink(object):
         fo_count.close()
         d.close()
         return
+

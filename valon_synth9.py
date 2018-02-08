@@ -181,7 +181,7 @@ class Synthesizer:
         data=data.split('ATT ')[1]
         data=data.split(';')[0]
         rf_level=float(data)-15
-        return rf_level
+        return -rf_level
 
     def set_rf_level(self, synth, rf_level):
         """

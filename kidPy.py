@@ -27,6 +27,8 @@ import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
 from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
+from PSDs import allPSD as PSD
+import pygetdata as gd
 plt.ion()
 
 ################################################################
@@ -100,8 +102,8 @@ def initValon(valon, ext_ref = False, ref_freq = 10):
     valon.set_pfd(LO, 10.)
     valon.set_frequency(LO, center_freq) # LO
     valon.set_frequency(CLOCK, 512.) # Clock
-    valon.set_rf_level(CLOCK, 6)
-    valon.set_rf_level(LO, -4)
+    valon.set_rf_level(CLOCK, 7)
+    valon.set_rf_level(LO, 10)
     return
 
 def getValon():
@@ -124,12 +126,12 @@ def setValonLevel(valon, chan, dBm):
     valon.set_rf_level(chan, dBm)
     return
 
-def setAtten(outAtten, inAtten):
+def setAtten(inAtten, outAtten):
     """Set the input and output attenuation levels for a RUDAT MCL-30-6000
         inputs:
             float outAtten: The output attenuation in dB
             float inAtten: The input attenuation in dB"""
-    command = "sudo ./set_rudats " + str(outAtten) + ' ' + str(inAtten)
+    command = "sudo ./set_rudats " + str(inAtten) + ' ' + str(outAtten)
     os.system(command)
     return
 
@@ -140,9 +142,9 @@ def readAtten():
             float inAtten"""
     os.system("sudo ./read_rudats > rudat.log")
     attens = np.loadtxt('./rudat.log', delimiter = ",")
-    outAtten = attens[0][1]
-    inAtten = attens[1][1]
-    return outAtten, inAtten
+    inAtten = attens[0][1]
+    outAtten = attens[1][1]
+    return inAtten, outAtten
 
 # Needs testing
 def calibrateADC(target_rms_mv, outAtten, inAtten):
@@ -213,11 +215,11 @@ main_opts= ['Test connection to ROACH',\
             'Write found freqs',\
             'Target sweep and plot',\
             'Plot channel phase PSD (quick look)',\
-            'Save dirfile for range of chan (phase)',\
+            'Save dirfile for range of chan',\
             'Exit']
 #########################################################################
 
-def vnaSweep(ri, udp, valon, write = False, Navg = 80):
+def vnaSweep(ri, udp, valon):
     """Does a wideband sweep of the RF band, saves data in vna_savepath
        as .npy files
        inputs:
@@ -226,17 +228,19 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 80):
            valon synth object valon
            bool write: Write test comb before sweeping?
            Navg = Number of data points to average at each sweep step"""
+    Navg = np.float(gc[np.where(gc == 'Navg')[0][0]][1])
     if not os.path.exists(vna_savepath):
         os.makedirs(vna_savepath)
     sweep_dir = vna_savepath + '/' + \
        str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
     os.mkdir(sweep_dir)
     np.save("./last_vna_dir.npy", sweep_dir)
+    print sweep_dir
     valon.set_frequency(LO, center_freq/1.0e6)
-    span = ri.neg_delta
-    print "Sweep Span =", np.round(ri.neg_delta,2), "Hz"
-    start = center_freq*1.0e6 - (span/2.)
-    stop = center_freq*1.0e6 + (span/2.)
+    span = ri.pos_delta
+    print "Sweep Span =", 2*np.round(ri.pos_delta,2), "Hz"
+    start = center_freq*1.0e6 - (span)
+    stop = center_freq*1.0e6 + (span)
     sweep_freqs = np.arange(start, stop, lo_step)
     sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
     if not np.size(ri.freq_comb):
@@ -250,13 +254,63 @@ def vnaSweep(ri, udp, valon, write = False, Navg = 80):
         print 'LO freq =', freq/1.0e6
         valon.set_frequency(LO, freq/1.0e6)
         #print "LO freq =", valon.get_frequency(LO)
-        time.sleep(0.2)
+        #time.sleep(0.1)
         udp.saveSweepData(Navg, sweep_dir, freq, Nchan)
-        time.sleep(0.1)
+        #time.sleep(0.1)
     valon.set_frequency(LO, center_freq) # LO
     return
 
-def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
+def vnaSweepConsole():
+    """Does a wideband sweep of the RF band, saves data in vna_savepath
+       as .npy files"""
+    # UDP socket
+    s = socket(AF_PACKET, SOCK_RAW, htons(3))
+    # Valon object
+    valon = getValon()
+    # Roach PPC object
+    fpga = getFPGA()
+    # Roach interface 
+    ri = roachInterface(fpga, gc, regs, valon)
+    # UDP object
+    udp = roachDownlink(ri, fpga, gc, regs, s, ri.accum_freq)
+    udp.configSocket()
+    Navg = np.float(gc[np.where(gc == 'Navg')[0][0]][1])
+    if not os.path.exists(vna_savepath):
+        os.makedirs(vna_savepath)
+    sweep_dir = vna_savepath + '/' + \
+       str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
+    os.mkdir(sweep_dir)
+    np.save("./last_vna_dir.npy", sweep_dir)
+    print sweep_dir
+    valon.set_frequency(LO, center_freq/1.0e6)
+    span = ri.pos_delta
+    print "Sweep Span =", 2*np.round(ri.pos_delta,2), "Hz"
+    start = center_freq*1.0e6 - (span)
+    stop = center_freq*1.0e6 + (span)
+    sweep_freqs = np.arange(start, stop, lo_step)
+    sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
+    if not np.size(ri.freq_comb):
+        ri.makeFreqComb()
+    np.save(sweep_dir + '/bb_freqs.npy', ri.freq_comb)
+    np.save(sweep_dir + '/sweep_freqs.npy', sweep_freqs)
+    Nchan = len(ri.freq_comb)
+    if not Nchan:
+        Nchan = fpga.read_int(regs[np.where(regs == 'read_comb_len_reg')[0][0]][1])
+    idx = 0
+    while (idx < len(sweep_freqs)):
+        print 'LO freq =', sweep_freqs[idx]/1.0e6
+        valon.set_frequency(LO, sweep_freqs[idx]/1.0e6)
+        time.sleep(0.2)
+        #time.sleep(0.1)
+        if (udp.saveSweepData(Navg, sweep_dir, sweep_freqs[idx], Nchan) < 0):
+            continue
+        else:
+            idx += 1
+        #time.sleep(0.1)
+    valon.set_frequency(LO, center_freq) # LO
+    return
+
+def targetSweep(ri, udp, valon):
     """Does a sweep centered on the resonances, saves data in targ_savepath
        as .npy files
        inputs:
@@ -266,7 +320,8 @@ def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
            bool write: Write test comb before sweeping?
            float span: Sweep span, Hz
            Navg = Number of data points to average at each sweep step"""
-    # span = Hz
+    span = np.float(gc[np.where(gc == 'targ_span')[0][0]][1])
+    Navg = np.float(gc[np.where(gc == 'Navg')[0][0]][1])
     vna_savepath = str(np.load("last_vna_dir.npy"))
     if not os.path.exists(targ_savepath):
         os.makedirs(targ_savepath)
@@ -274,26 +329,21 @@ def targetSweep(ri, udp, valon, write = False, span = 150.0e3, Navg = 50):
        str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
     os.mkdir(sweep_dir)
     np.save("./last_targ_dir.npy", sweep_dir)
+    print sweep_dir
     target_freqs = np.load(vna_savepath + '/bb_targ_freqs.npy')
     np.save(sweep_dir + '/bb_target_freqs.npy', target_freqs)
-    bb_target_freqs = (self.target_freqs/1.0e6) - (center_freq*1.0e6)
-    bb_target_freqs = np.roll(bb_target_freqs, - np.argmin(np.abs(bb_target_freqs)) - 1)
-    upconvert = np.sort(bb_target_freqs + center_freq*1.0e6)
-    #print "RF tones =", upconvert
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
     sweep_freqs = np.arange(start, stop, lo_step)
     sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
-    np.save(sweep_dir + '/bb_freqs.npy', bb_target_freqs)
+    np.save(sweep_dir + '/bb_freqs.npy', target_freqs)
     np.save(sweep_dir + '/sweep_freqs.npy',sweep_freqs)
-    if write:
-        ri.writeQDR(bb_target_freqs)
     for freq in sweep_freqs:
-        print 'LO freq =', freq/1.0e6
+        print 'LO freq =', freq/1.0e6, ' MHz'
         valon.set_frequency(LO, freq/1.0e6)
-        time.sleep(0.2)
-        udp.saveSweepData(Navg, sweep_dir, freq, len(bb_target_freqs)) 
-        time.sleep(0.1)
+        #time.sleep(0.1)
+        udp.saveSweepData(Navg, sweep_dir, freq, len(target_freqs)) 
+        #time.sleep(0.1)
     valon.set_frequency(LO, center_freq)
     return
 
@@ -316,9 +366,30 @@ def openStoredSweep(savepath):
     return Is, Qs
 
 def plotVNASweep(path):
-    """Plots the results of a VNA sweep
-       inputs:
-           path: Absolute path to where sweep data is saved"""
+    plt.figure()
+    Is, Qs = openStoredSweep(path)
+    sweep_freqs = np.load(path + '/sweep_freqs.npy')
+    bb_freqs = np.load(path + '/bb_freqs.npy')
+    rf_freqs = np.zeros((len(bb_freqs),len(sweep_freqs)))
+    for chan in range(len(bb_freqs)):
+        rf_freqs[chan] = (sweep_freqs + bb_freqs[chan])/1.0e6
+    Q = np.reshape(np.transpose(Qs),(len(Qs[0])*len(sweep_freqs)))
+    I = np.reshape(np.transpose(Is),(len(Is[0])*len(sweep_freqs)))
+    mag = np.sqrt(I**2 + Q**2)
+    mag = 20*np.log10(mag/np.max(mag))
+    mag = np.concatenate((mag[len(mag)/2:],mag[:len(mag)/2]))
+    rf_freqs = np.hstack(rf_freqs)
+    rf_freqs = np.concatenate((rf_freqs[len(rf_freqs)/2:],rf_freqs[:len(rf_freqs)/2]))
+    plt.plot(rf_freqs, mag)
+    plt.title(path, size = 16)
+    plt.xlabel('frequency (MHz)', size = 16)
+    plt.ylabel('dB', size = 16)
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(os.path.join(path,'vna_sweep.png'), dpi = 100, bbox_inches = 'tight')
+    return
+"""
+def plotVNASweep(path):
     plt.figure()
     Is, Qs = openStoredSweep(path)
     sweep_freqs = np.load(path + '/sweep_freqs.npy')
@@ -340,7 +411,7 @@ def plotVNASweep(path):
     plt.tight_layout()
     plt.savefig(os.path.join(path,'vna_sweep.png'), dpi = 100, bbox_inches = 'tight')
     return
-
+"""
 def plotTargSweep(path):
     """Plots the results of a TARG sweep
        inputs:
@@ -370,6 +441,87 @@ def plotTargSweep(path):
     plt.savefig(os.path.join(path,'targ_sweep.png'), dpi = 100, bbox_inches = 'tight')
     return
 
+def plotLastVNASweep():
+    plotVNASweep(str(np.load('last_vna_dir.npy')))
+    return
+
+def plotLastTargSweep():
+    plotTargSweep(str(np.load('last_targ_dir.npy')))
+    return
+
+def saveTimestreamDirfile(subfolder, start_chan, end_chan, time_interval):
+    """Saves a dirfile containing the I and Q values for a range of channels, streamed
+       over a time interval specified by time_interval
+       inputs:
+           float time_interval: Time interval to integrate over, seconds"""
+    # Roach PPC object
+    fpga = getFPGA()
+    # UDP socket
+    s = socket(AF_PACKET, SOCK_RAW, htons(3))
+    # Roach interface 
+    ri = roachInterface(fpga, gc, regs, None)
+    # UDP object
+    udp = roachDownlink(ri, fpga, gc, regs, s, ri.accum_freq)
+    udp.configSocket()
+    chan_range = range(start_chan, end_chan + 1)
+    data_path = gc[np.where(gc == 'DIRFILE_SAVEPATH')[0][0]][1] 
+    Npackets = int(np.ceil(time_interval * ri.accum_freq))
+    udp.zeroPPS()
+    save_path = os.path.join(data_path, subfolder)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    filename = save_path + '/' + \
+               str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
+    print filename
+    # make the dirfile
+    d = gd.dirfile(filename,gd.CREAT|gd.RDWR|gd.UNENCODED)
+    # add fields
+    I_fields = []
+    Q_fields = []
+    for chan in chan_range:
+        I_fields.append('I_' + str(chan))
+        Q_fields.append('Q_' + str(chan))
+        d.add_spec('I_' + str(chan) + ' RAW FLOAT64 1')
+        d.add_spec('Q_' + str(chan) + ' RAW FLOAT64 1')
+    d.close()
+    d = gd.dirfile(filename,gd.RDWR|gd.UNENCODED)
+    nfo_I = map(lambda z: filename + "/I_" + str(z), chan_range)
+    nfo_Q = map(lambda z: filename + "/Q_" + str(z), chan_range)
+    fo_I = map(lambda z: open(z, "ab"), nfo_I)
+    fo_Q = map(lambda z: open(z, "ab"), nfo_Q)
+    fo_time = open(filename + "/time", "ab")
+    fo_count = open(filename + "/packet_count", "ab")
+    count = 0
+    while count < Npackets:
+        ts = time.time()
+        try:
+            packet, data, header, saddr = udp.parsePacketData()
+            if not packet:
+                continue
+        except TypeError:
+            continue
+        packet_count = (np.fromstring(packet[-4:],dtype = '>I'))
+        idx = 0
+        for chan in range(start_chan, end_chan + 1):
+            I, Q, __ = udp.parseChanData(chan, data)
+            fo_I[idx].write(struct.pack('d', I))
+            fo_Q[idx].write(struct.pack('d', Q))
+            fo_I[idx].flush()
+            fo_Q[idx].flush()
+            idx += 1
+        fo_count.write(struct.pack('L',packet_count))
+        fo_count.flush()
+        fo_time.write(struct.pack('d', ts))
+        fo_time.flush()
+        count += 1
+    for idx in range(len(fo_I)):
+         fo_I[idx].close()
+         fo_Q[idx].close()
+    fo_time.close()
+    fo_count.close()
+    d.close()
+    return
+
 def getSystemState(fpga, ri, udp, valon):
     """Displays current firmware configuration
        inputs:
@@ -387,14 +539,14 @@ def getSystemState(fpga, ri, udp, valon):
     print "Data downlink:"
     print "Stream status: ", fpga.read_int(regs[np.where(regs == 'read_stream_status_reg')[0][0]][1])
     print "Data rate: ", ri.accum_freq, "Hz", ", " + str(np.round(buf_size * ri.accum_freq / 1.0e6, 2)) + " MB/s"
-    print "UDP source IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_srcip_reg')[0][0]][1]))),":", fpga.read_int(regs[np.where(regs == 'udp_srcport_reg')[0][0]][1]) 
-    print "UDP dest IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_destip_reg')[0][0]][1]))),":", fpga.read_int(regs[np.where(regs == 'udp_destport_reg')[0][0]][1])
+    #print "UDP source IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_srcip_reg')[0][0]][1]))),":", fpga.read_int(regs[np.where(regs == 'udp_srcport_reg')[0][0]][1]) 
+    #print "UDP dest IP,port:", inet_ntoa(struct.pack(">i", fpga.read_int(regs[np.where(regs == 'udp_destip_reg')[0][0]][1]))),":", fpga.read_int(regs[np.where(regs == 'udp_destport_reg')[0][0]][1])
     print
     print "ADC and attenuator levels:"
-    #outAtten, inAtten = readAtten()
+    inAtten, outAtten = readAtten()
     rmsI, rmsQ, crest_factor_I, crest_factor_Q = ri.rmsVoltageADC()
-    #print "in atten:", inAtten, "dB"
-    #print "out atten:", outAtten, "dB"
+    print "out atten:", outAtten, "dB"
+    print "in atten:", inAtten, "dB"
     print "ADC V_rms (I,Q):", rmsI, "mV", rmsQ, "mV"
     print "Crest factor (I,Q):", crest_factor_I, "dB", crest_factor_Q, "dB"
     print
@@ -402,9 +554,9 @@ def getSystemState(fpga, ri, udp, valon):
     #print "Reference:"
     print "LO center freq:", center_freq, "MHz"
     print "Current LO freq:", valon.get_frequency(LO), "MHz"
-    print "Current LO power:", -1*valon.get_rf_level(LO), "dBm"
+    print "Current LO power:", valon.get_rf_level(LO), "dBm"
     print "Current clock freq:", valon.get_frequency(CLOCK), "MHz"
-    print "Current clock power:", -1*valon.get_rf_level(CLOCK), "dBm"
+    print "Current clock power:", valon.get_rf_level(CLOCK), "dBm"
     return
 
 def plotPhasePSD(chan, udp, ri, time_interval):
@@ -415,19 +567,41 @@ def plotPhasePSD(chan, udp, ri, time_interval):
            roachInterface object ri
            float time_interval: The integration time interval, seconds"""
     plt.ion()
-    plt.figure(figsize = (10.24, 7.68), dpi = 100)
-    plt.title(r' $S_{\phi \phi}$', size = 18)
+    I, Q, phases = udp.streamChanPhase(chan, time_interval)
+    f, Sii = signal.welch(I, ri.accum_freq, nperseg=len(I)/4)
+    f, Sqq = signal.welch(Q, ri.accum_freq, nperseg=len(Q)/4)
+    f, Spp = signal.welch(phases, ri.accum_freq, nperseg=len(phases)/4)
+    Spp = 10*np.log10(Spp[1:]) 
+    Sii = 10*np.log10(Sii[1:]) 
+    Sqq = 10*np.log10(Sqq[1:]) 
+    #plt.figure(figsize = (10.24, 7.68))
+    #plt.title(r' $S_{\phi \phi}$', size = 18)
+    plt.suptitle('Chan ' + str(chan))
+    plt.subplot(3,1,1)
     ax = plt.gca()
     ax.set_xscale('log')
-    ax.set_ylabel('dBc/Hz', size = 18)
-    ax.set_xlabel('log Hz', size = 18)
-    phases = udp.streamChanPhase(chan, time_interval)
-    f, Spp = signal.welch(phases, ri.accum_freq, nperseg=len(phases)/2)
-    Spp = 10*np.log10(Spp[1:]) 
-    print "MIN =", np.min(Spp), "dBc/Hz"
-    print "MAX =", np.max(Spp), "dBc/Hz"
+    ax.set_ylabel('dBc/Hz', size = 16)
+    #ax.set_xlabel('log Hz', size = 16)
+    ax.set_ylim((np.min(Sii) - 10, np.max(Sii) + 10))
+    ax.plot(f[1:], Sii, linewidth = 1, label = 'I', alpha = 0.7)
+    plt.legend(loc = 'upper right')
+    plt.grid()
+    plt.subplot(3,1,2)
+    ax = plt.gca()
+    ax.set_xscale('log')
+    ax.set_ylabel('dBc/Hz', size = 16)
+    #ax.set_xlabel('log Hz', size = 16)
+    ax.set_ylim((np.min(Sqq) - 10, np.max(Sqq) + 10))
+    ax.plot(f[1:], Sqq, linewidth = 1, label = 'Q', alpha = 0.7)
+    plt.legend(loc = 'upper right')
+    plt.grid()
+    plt.subplot(3,1,3)
+    ax = plt.gca()
+    ax.set_xscale('log')
+    ax.set_ylabel('dBc/Hz', size = 16)
+    ax.set_xlabel('log Hz', size = 16)
     ax.set_ylim((np.min(Spp) - 10, np.max(Spp) + 10))
-    ax.plot(f[1:], Spp, linewidth = 1, label = 'chan ' + str(chan), alpha = 0.7)
+    ax.plot(f[1:], Spp, linewidth = 1, label = 'Phase', alpha = 0.7)
     plt.legend(loc = 'upper right')
     plt.grid()
     return
@@ -640,7 +814,7 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 print '\033[93mValon Synthesizer could not be initialized: Check comm port and power supply\033[93m'
                 break
             fpga.write_int(regs[np.where(regs == 'accum_len_reg')[0][0]][1], ri.accum_len - 1)
-            #fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], int(gc[np.where(gc == 'dds_shift')[0][0]][1]))
+            fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], int(gc[np.where(gc == 'dds_shift')[0][0]][1]))
             time.sleep(0.1)
             #ri.lpf(ri.boxcar)
             if (ri.qdrCal() < 0):
@@ -762,19 +936,11 @@ def main_opt(fpga, ri, udp, valon, upload_status):
             if not fpga:
                 print "\nROACH link is down"
                 break
-            prompt = raw_input('Write test comb (required if first sweep) ? (y/n) ')
-            if prompt == 'y':
-                try:
-                    vnaSweep(ri, udp, valon, write = True)
-                    plotVNASweep(str(np.load("last_vna_dir.npy")))
-                except KeyboardInterrupt:
-                    pass
-            if prompt == 'n':
-                try:
-                    vnaSweep(ri, udp, valon)
-                    plotVNASweep(str(np.load("last_vna_dir.npy")))
-                except KeyboardInterrupt:
-                    pass
+            try:
+                vnaSweep(ri, udp, valon)
+                plotVNASweep(str(np.load("last_vna_dir.npy")))
+            except KeyboardInterrupt:
+                pass
         if opt == 11:
             try:
                 path = str(np.load("last_vna_dir.npy"))
@@ -791,10 +957,10 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 freq_comb = np.load(os.path.join(str(np.load('last_vna_dir.npy')), 'bb_targ_freqs.npy'))
                 freq_comb = freq_comb[freq_comb != 0]
                 freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
-                ri.freq_comb = (freq_comb/1.0e6) - center_freq*1.0e6
+                ri.freq_comb = freq_comb
                 print ri.freq_comb
-                ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)
-                print "RF tones =", ri.upconvert
+                #ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)
+                #print "RF tones =", ri.upconvert
                 if len(ri.freq_comb) > 400:
                     fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)    
                     time.sleep(0.1)
@@ -810,19 +976,11 @@ def main_opt(fpga, ri, udp, valon, upload_status):
             if not fpga:
                 print "\nROACH link is down"
                 break
-            prompt = raw_input('Write tones (recommended for first time)? (y/n) ')
-            if prompt == 'y':
-                try:
-                    targetSweep(ri, udp, valon, write = True)
-                    plotTargSweep(str(np.load("last_targ_dir.npy")))
-                except KeyboardInterrupt:
-                    pass
-            if prompt == 'n':
-                try:
-                    targetSweep(ri, udp, valon)
-                    plotTargSweep(str(np.load("last_targ_dir.npy")))
-                except KeyboardInterrupt:
-                    pass
+            try:
+                targetSweep(ri, udp, valon)
+                plotTargSweep(str(np.load("last_targ_dir.npy")))
+            except KeyboardInterrupt:
+                pass
         if opt == 14:
             if not fpga:
                 print "\nROACH link is down"
@@ -937,7 +1095,7 @@ def main():
             upload_status = main_opt(fpga, ri, udp, valon, upload_status)
         except TypeError:
             pass
-    return
+    return 
 
 def plot_main():
     try:
@@ -948,10 +1106,10 @@ def plot_main():
     ri = roachInterface(fpga, gc, regs, None)
     while 1:
         plot_opt(ri)
-    return
+    return 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         plot_main()
     else:
-       main()
+        ri, udp, v = main()
