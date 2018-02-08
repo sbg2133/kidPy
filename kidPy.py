@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from sean_psd import amplitude_and_power_spectrum as sean_psd
 from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
-from PSDs import allPSD as PSD
+#from PSDs import allPSD as PSD
 import pygetdata as gd
 plt.ion()
 
@@ -258,6 +258,44 @@ def vnaSweep(ri, udp, valon):
         udp.saveSweepData(Navg, sweep_dir, freq, Nchan)
         #time.sleep(0.1)
     valon.set_frequency(LO, center_freq) # LO
+    return
+
+def writeVnaComb(cw = False):                                                             
+    # Roach PPC object                                                          
+    fpga = getFPGA()                                                            
+    if not fpga:                                                                
+        print "\nROACH link is down"                                            
+        return                                                                  
+    # Roach interface                                                           
+    ri = roachInterface(fpga, gc, regs, None)                                   
+    try:                                                                        
+	if cw:
+            ri.freq_comb = test_freq    
+	else:
+	    ri.makeFreqComb()
+        if (len(ri.freq_comb) > 400):                                             
+            fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)
+            time.sleep(0.1)                                                     
+        else:                                                                   
+            fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**9 -1)
+            time.sleep(0.1)                                                     
+        ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)    
+        print "RF tones =", ri.upconvert                                        
+        ri.writeQDR(ri.freq_comb, transfunc = False)                            
+        np.save("last_freq_comb.npy", ri.freq_comb)                             
+        if not (fpga.read_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1])):
+            if regs[np.where(regs == 'DDC_mixerout_bram_reg')[0][0]][1] in fpga.listdev():
+                shift = ri.return_shift(0)                                      
+                if (shift < 0):                                                 
+                    print "\nError finding dds shift: Try writing full frequency comb (N = 1000), or single test frequency. Then try again"
+                    return                                                       
+                else:                                                           
+                    fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], shift)
+                    print "Wrote DDS shift (" + str(shift) + ")"                
+            else:                                                               
+                fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], ri.dds_shift)
+    except KeyboardInterrupt:                                                   
+        return 
     return
 
 def vnaSweepConsole():
@@ -829,40 +867,11 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 print "UDP Downlink could not be configured. Check ROACH connection."
                 break
         if opt == 3:
-            if not fpga:
-                print "\nROACH link is down"
-                break
-            try:
-                prompt = raw_input('Full test comb? y/n ')
-                if prompt == 'y':
-                    ri.makeFreqComb()
-                    #setAtten(30, 20)
-                else:
-                    ri.freq_comb = test_freq
-                    #setAtten(30, 30)
-                if len(ri.freq_comb) > 400:
-                    fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)
-                    time.sleep(0.1)
-                else:
-                    fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**9 -1)
-                    time.sleep(0.1)
-                ri.upconvert = np.sort(((ri.freq_comb + (center_freq)*1.0e6))/1.0e6)
-                print "RF tones =", ri.upconvert
-                ri.writeQDR(ri.freq_comb, transfunc = False)
-                np.save("last_freq_comb.npy", ri.freq_comb)
-                if not (fpga.read_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1])):
-                    if regs[np.where(regs == 'DDC_mixerout_bram_reg')[0][0]][1] in fpga.listdev():
-                        shift = ri.return_shift(0)
-                        if (shift < 0):
-                            print "\nError finding dds shift: Try writing full frequency comb (N = 1000), or single test frequency. Then try again"
-                            break
-                        else:
-                            fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], shift)
-                            print "Wrote DDS shift (" + str(shift) + ")"
-                    else:
-                        fpga.write_int(regs[np.where(regs == 'dds_shift_reg')[0][0]][1], ri.dds_shift)
-            except KeyboardInterrupt:
-                pass
+             prompt = raw_input('Full test comb? y/n ')
+             if prompt == 'y':
+		 writeVnaComb()
+             else:
+                 writeVnaComb(cw = True)
         if opt == 4:
             if not fpga:
                 print "\nROACH link is down"
