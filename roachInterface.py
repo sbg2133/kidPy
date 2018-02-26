@@ -302,6 +302,7 @@ class roachInterface(object):
 		mag_array[i] = mags[2:len(self.freq_comb)+2]
 	mean = np.mean(mag_array, axis = 0)
 	transfunc = 1./ (mean / np.max(mean))
+	print transfunc
 	np.save('./last_transfunc.npy', transfunc)
 	print "Done"
 	return transfunc

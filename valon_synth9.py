@@ -69,7 +69,6 @@ class Synthesizer:
         data = 's'+str(synth)+';f'+str(freq)+'\r'
         self.conn.write(data)
         self.conn.flush()
-        self.conn.flush()
         t = time()
 	data = ''
         while (len(data) < 40 and time()-t < 1): data += self.conn.read(40)
@@ -105,7 +104,9 @@ class Synthesizer:
         data = 'REF '+str(freq)+'M\r'
         self.conn.write(data)
         self.conn.flush()
-        data = self.conn.read(100)
+        t = time()
+	data = ''
+        while (len(data) < 40 and time()-t < 1): data += self.conn.read(40)
         self.conn.close()
         #print data
         ack=data.split(' ')[2]
@@ -181,7 +182,7 @@ class Synthesizer:
         data=data.split('ATT ')[1]
         data=data.split(';')[0]
         rf_level=float(data)-15
-        return -rf_level
+        return rf_level
 
     def set_rf_level(self, synth, rf_level):
         """
@@ -268,7 +269,9 @@ class Synthesizer:
         data = 'REFS?\r'
         self.conn.write(data)
         self.conn.flush()
-        data = self.conn.read(100)
+        t = time()
+	data = ''
+        while (len(data) < 40 and time()-t < 1): data += self.conn.read(40)
         self.conn.close()
         data=data.split(' ')[1]
         data=data.split(';')[0]
@@ -287,7 +290,9 @@ class Synthesizer:
         self.conn.open()
         self.conn.write(data)
         self.conn.flush()
-        data = self.conn.read(100)
+        t = time()
+	data = ''
+        while (len(data) < 40 and time()-t < 1): data += self.conn.read(40)
         self.conn.close()
         ack=data.split(' ')[1]
         ack=ack.split(';')[0]

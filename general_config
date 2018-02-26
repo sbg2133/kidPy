@@ -1,24 +1,27 @@
 # Path to firmware file
-FIRMWARE_FILE stable_nofir11242017_2017_Dec_05_1113.fpg 
+FIRMWARE_FILE ./stable_ctime_v6_2018_Feb_19_1053.fpg
 
 # Path to sweep directories
-VNA_SAVEPATH ./vna
-TARG_SAVEPATH ./targ
+VNA_SAVEPATH ./november2017/vna
+TARG_SAVEPATH ./november2017/targ
 # Path for saved streaming data
-DIRFILE_SAVEPATH ./timestreams
+DIRFILE_SAVEPATH /media/user1/FREE/eee505_project_data
 
 NETWORK PARAMS
 # IP address of your Roach2 PowerPC
-roach_ppc_ip 192.168.40.50
+roach_ppc_ip 192.168.40.70
+
+# Valon EXT REF flag (1 for external)
+ext_ref 0
 
 # If you're using a Valon LO, this is the comm port (do: dmesg | grep ttyUSB)
 valon_comm_port /dev/ttyUSB0
 
-# DDS shift (firmware dependent)
-dds_shift 318
-
 # Total UDP packet size, bytes
 buf_size 8234
+
+# Hardcode dds shift value
+dds_shift 318
 
 # UDP packet header length, bytes 
 header_len 42 
@@ -27,41 +30,35 @@ header_len 42
 udp_dest_ip 192.168.41.2
 
 # Ethernet device handle corresponding udp_dest_ip (see: ifconfig)
-udp_dest_device eth4
+udp_dest_device eth2
 
 # Destination port on eth2 (you choose)
 udp_dst_port 60000
 
 # UDP source IP address (you choose)
-udp_src_ip 192.168.40.73
+udp_src_ip 192.168.40.72
 
 # UDP source port (you choose)
-udp_src_port 60000
+udp_src_port 60002
 
 # Roach2 MAC address (hard coded in Roach2)
-udp_src_mac 024401021109
+udp_src_mac 02440102110E
 
 # UDP destination MAC address (you choose)
-udp_dest_mac 001B212F9C85
+udp_dest_mac 681CA2123652 
 
 ROACH PARAMS
 
-# A list of baseband frequencies, in Hz
+# A list of baseband frequencies 
 freq_list 250um_array.npy
 
 # LO step size to be used during VNA/TARG sweeps, Hz
-lo_step 2.5e3
-
-# Number of sweep points to average
-Navg 3
-
-# Targ sweep span, Hz
-targ_span 150.0e3
+lo_step 1.0e3
 
 # LO center frequency, MHz
-center_freq 850.0
+center_freq 828.0
 
-VNA_COMB PARAMS
+COMB PARAMS
 
 # Number of frequencies in test comb
 Nfreq 1000
@@ -70,16 +67,16 @@ Nfreq 1000
 max_pos_freq 246.001234e6
 
 # Minimum positive frequency, Hz
-min_pos_freq 10.02342e6
+min_pos_freq 1.02342e6
 
 # Maximum negative frequency, Hz
-max_neg_freq -10.02342e6
+max_neg_freq -1.02342e6
 
 # Minimum negative frequency, Hz
 min_neg_freq -246.001234e6
 
 # Offset between positive and negative combs, Hz
-symm_offset 250.e3
+symm_offset 250.0e3
 
 # A single test frequency, Hz
 test_freq 10.0125e6
@@ -90,10 +87,8 @@ RESONANCE_FINDING PARAMS
 smoothing_scale 5.0e6
 
 # Amplitude cutoff threshold, dB (e.g., search points <= -6 dB)
-peak_threshold 5
+peak_threshold 6
 
 # Frequency spacing threshold, kHz (if two resonances spaced by <= this amount, 
 # choose the deeper one
-spacing_threshold 50.
-
-
+spacing_threshold 20.

@@ -52,6 +52,7 @@ header_len = int(gc[np.where(gc == 'header_len')[0][0]][1])
 # Valon Synthesizer params
 CLOCK = 1
 LO = 2
+ext_ref = int(gc[np.where(gc == 'ext_ref')[0][0]][1])
 lo_step = np.float(gc[np.where(gc == 'lo_step')[0][0]][1])
 center_freq = np.float(gc[np.where(gc == 'center_freq')[0][0]][1])
 
@@ -130,7 +131,7 @@ def testConn(fpga):
             print "\nNo connection to ROACH. If booting, wait 30 seconds and retry. Otherwise, check gc config."
     return fpga
 
-def initValon(valon, ext_ref = False, ref_freq = 10):
+def initValon(valon, ref_freq = 10):
     """Configures default parameters for a Valon 5009 Sythesizer
         inputs:
             valon synth object valon: See getValon()
@@ -139,6 +140,8 @@ def initValon(valon, ext_ref = False, ref_freq = 10):
     if ext_ref:
         valon.set_reference(ref_freq)
         valon.set_ref_select(1)
+    else:
+        valon.set_ref_select(0)
     valon.set_refdoubler(CLOCK, 0)
     valon.set_refdoubler(LO, 0)
     valon.set_pfd(CLOCK, 40.)
@@ -1208,10 +1211,9 @@ def plot_main():
     while 1:
         plot_opt(ri)
     return 
-"""
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         plot_main()
     else:
         main()
-"""
