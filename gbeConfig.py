@@ -64,7 +64,7 @@ class roachDownlink(object):
 
     def configDownlink(self):
         """Configure GbE parameters"""
-        """
+        
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcmac0_reg')[0][0]][1], self.udp_srcmac0)
         time.sleep(0.05)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcmac1_reg')[0][0]][1], self.udp_srcmac1)
@@ -75,15 +75,14 @@ class roachDownlink(object):
         time.sleep(0.05)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcip_reg')[0][0]][1], self.udp_src_ip)
         time.sleep(0.05)
-        """
+        
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destip_reg')[0][0]][1], self.udp_dest_ip)
         time.sleep(0.1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_destport_reg')[0][0]][1], self.udp_dst_port)
         time.sleep(0.1)
-        """
+        
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_srcport_reg')[0][0]][1], self.udp_src_port)
         time.sleep(0.1)
-        """
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_start_reg')[0][0]][1],0)
         time.sleep(0.1)
         self.fpga.write_int(self.regs[np.where(self.regs == 'udp_start_reg')[0][0]][1],1)

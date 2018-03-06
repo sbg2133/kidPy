@@ -198,6 +198,8 @@ class Synthesizer:
         """
         "15 dB is equal to 0 dB ouput power"
         "can be set from 0 (+15) to 31.5 (-16.5)"
+	# Writing 0 dBm results in ~0.7 dBm output
+	rf_level -= 1.
         if -16.5<=rf_level<=15:
             atten=-rf_level+15
             #print atten
