@@ -405,7 +405,7 @@ def targetSweep(ri, udp, valon):
            float span: Sweep span, Hz
            Navg = Number of data points to average at each sweep step"""
     span = np.float(gc[np.where(gc == 'targ_span')[0][0]][1])
-    Navg = np.float(gc[np.where(gc == 'Navg')[0][0]][1])
+    Navg = np.int(gc[np.where(gc == 'Navg')[0][0]][1])
     vna_savepath = str(np.load("last_vna_dir.npy"))
     if not os.path.exists(targ_savepath):
         os.makedirs(targ_savepath)
