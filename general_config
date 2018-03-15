@@ -17,6 +17,12 @@ ext_ref 0
 # If you're using a Valon LO, this is the comm port (do: dmesg | grep ttyUSB)
 valon_comm_port /dev/ttyUSB0
 
+# Valon clock port
+clock 1
+
+# Valon lo port
+lo 2
+
 # Total UDP packet size, bytes
 buf_size 8234
 

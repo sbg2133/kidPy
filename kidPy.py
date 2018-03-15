@@ -50,8 +50,8 @@ buf_size = int(gc[np.where(gc == 'buf_size')[0][0]][1])
 header_len = int(gc[np.where(gc == 'header_len')[0][0]][1])
 
 # Valon Synthesizer params
-CLOCK = 1
-LO = 2
+CLOCK = int(gc[np.where(gc == 'clock')[0][0]][1])
+LO = int(gc[np.where(gc == 'lo')[0][0]][1])
 ext_ref = int(gc[np.where(gc == 'ext_ref')[0][0]][1])
 lo_step = np.float(gc[np.where(gc == 'lo_step')[0][0]][1])
 center_freq = np.float(gc[np.where(gc == 'center_freq')[0][0]][1])
