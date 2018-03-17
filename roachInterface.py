@@ -307,7 +307,7 @@ class roachInterface(object):
 	print "Done"
 	return transfunc
 
-    def freqComb(self, freqs, samp_freq, resolution, random_phase = True, DAC_LUT = True, apply_transfunc = False):
+    def freqComb(self, freqs, samp_freq, resolution, random_phase = True, DAC_LUT = True, apply_transfunc = False, **kwargs):
     # Generates a frequency comb for the DAC or DDS look-up-tables. DAC_LUT = True for the DAC LUT. Returns I and Q 
         freqs = np.round(freqs/self.dac_freq_res)*self.dac_freq_res
 	amp_full_scale = (2**15 - 1)
@@ -319,7 +319,10 @@ class roachInterface(object):
             	phase = np.random.uniform(0., 2.*np.pi, len(k))
             if apply_transfunc:
 	    	print "Applying transfer function to DAC LUTS"
-		self.amps = self.get_transfunc()
+		if ('transfunc_filename' in kwargs): #apply transfunc from file
+			self.amps = np.load(kwargs['transfunc_filename'])
+		else:# calculate the transfunc
+			self.amps = self.get_transfunc()
 	    else:
 	        self.amps = np.array([1.]*len(k))
                 #wn = np.load('noise_tf.npy')
@@ -374,10 +377,10 @@ class roachInterface(object):
             Q_dds[m::self.fft_len] = Q
         return I_dds, Q_dds
     
-    def pack_luts(self, freqs, transfunc = False):
+    def pack_luts(self, freqs, transfunc = False, **kwargs):
     # packs the I and Q look-up-tables into strings of 16-b integers, in preparation to write to the QDR. Returns the string-packed look-up-tables
         if transfunc:
-		I_dac, Q_dac = self.freqComb(freqs, self.dac_samp_freq, self.dac_freq_res, random_phase = True, apply_transfunc = True)
+		I_dac, Q_dac = self.freqComb(freqs, self.dac_samp_freq, self.dac_freq_res, random_phase = True, apply_transfunc = True, **kwargs)
         else:
 		I_dac, Q_dac = self.freqComb(freqs, self.dac_samp_freq, self.dac_freq_res, random_phase = True)
 	I_dds, Q_dds = self.define_DDS_LUT(freqs)
@@ -395,10 +398,10 @@ class roachInterface(object):
         Q_lut_packed = Q_lut.astype('>i2').tostring()
 	return I_lut_packed, Q_lut_packed
         
-    def writeQDR(self, freqs, transfunc = False):
+    def writeQDR(self, freqs, transfunc = False, **kwargs):
     # Writes packed LUTs to QDR
 	if transfunc:
-		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = True)
+		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = True, **kwargs)
 	else:
 		I_lut_packed, Q_lut_packed = self.pack_luts(freqs, transfunc = False)
         self.fpga.write_int(self.regs[np.where(self.regs == 'dac_reset_reg')[0][0]][1],1)

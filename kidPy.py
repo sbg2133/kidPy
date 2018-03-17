@@ -1123,7 +1123,7 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 break
             try:
 		prompt = raw_input("what is the filename of the script to be executed: ")
-		execfile("./scripts/"+prompt)
+		execfile("./scripts/"+prompt,locals())
             except KeyboardInterrupt:
                 pass
         if opt == 17:
