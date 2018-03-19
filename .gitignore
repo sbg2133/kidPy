@@ -1,0 +1,5 @@
+#python build
+*.pyc
+
+#temp files
+*~
