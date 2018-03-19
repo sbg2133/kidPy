@@ -50,8 +50,8 @@ buf_size = int(gc[np.where(gc == 'buf_size')[0][0]][1])
 header_len = int(gc[np.where(gc == 'header_len')[0][0]][1])
 
 # Valon Synthesizer params
-CLOCK = 1
-LO = 2
+CLOCK = int(gc[np.where(gc == 'clock')[0][0]][1])
+LO = int(gc[np.where(gc == 'lo')[0][0]][1])
 ext_ref = int(gc[np.where(gc == 'ext_ref')[0][0]][1])
 lo_step = np.float(gc[np.where(gc == 'lo_step')[0][0]][1])
 center_freq = np.float(gc[np.where(gc == 'center_freq')[0][0]][1])
@@ -262,6 +262,7 @@ main_opts= ['Test connection to ROACH',\
             'Target sweep and plot',\
             'Plot channel phase PSD (quick look)',\
             'Save dirfile for range of chan',\
+	    'Execute a script',\
             'Exit']
 #########################################################################
 
@@ -394,7 +395,7 @@ def vnaSweepConsole():
     valon.set_frequency(LO, center_freq) # LO
     return
 
-def targetSweep(ri, udp, valon):
+def targetSweep(ri, udp, valon,**keywords):
     """Does a sweep centered on the resonances, saves data in targ_savepath
        as .npy files
        inputs:
@@ -403,9 +404,19 @@ def targetSweep(ri, udp, valon):
            valon synth object valon
            bool write: Write test comb before sweeping?
            float span: Sweep span, Hz
-           Navg = Number of data points to average at each sweep step"""
-    span = np.float(gc[np.where(gc == 'targ_span')[0][0]][1])
-    Navg = np.float(gc[np.where(gc == 'Navg')[0][0]][1])
+           Navg = Number of data points to average at each sweep step
+	   keywords are:
+   	   span --specifies custom span rather than from general config
+           lo_step --specifies custom lo step rather than from general config"""
+    if ('span' in keywords):
+	span = keywords['span']
+    else:
+        span = np.float(gc[np.where(gc == 'targ_span')[0][0]][1])
+    if ('lo_step' in keywords):
+        lo_step_targ = keywords['lo_step']
+    else:
+        lo_step_targ = lo_step
+    Navg = np.int(gc[np.where(gc == 'Navg')[0][0]][1])
     vna_savepath = str(np.load("last_vna_dir.npy"))
     if not os.path.exists(targ_savepath):
         os.makedirs(targ_savepath)
@@ -418,8 +429,8 @@ def targetSweep(ri, udp, valon):
     np.save(sweep_dir + '/bb_target_freqs.npy', target_freqs)
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
-    sweep_freqs = np.arange(start, stop, lo_step)
-    sweep_freqs = np.round(sweep_freqs/lo_step)*lo_step
+    sweep_freqs = np.arange(start, stop, lo_step_targ)
+    sweep_freqs = np.round(sweep_freqs/lo_step_targ)*lo_step_targ
     np.save(sweep_dir + '/bb_freqs.npy', target_freqs)
     np.save(sweep_dir + '/sweep_freqs.npy',sweep_freqs)
     for freq in sweep_freqs:
@@ -1107,6 +1118,15 @@ def main_opt(fpga, ri, udp, valon, upload_status):
             except KeyboardInterrupt:
                 pass
         if opt == 16:
+            if not fpga:
+                print "\nROACH link is down"
+                break
+            try:
+		prompt = raw_input("what is the filename of the script to be executed: ")
+		execfile("./scripts/"+prompt)
+            except KeyboardInterrupt:
+                pass
+        if opt == 17:
             sys.exit()
         return upload_status
 
