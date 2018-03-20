@@ -247,7 +247,8 @@ def main(path, center_freq, sweep_step, smoothing_scale, peak_threshold, spacing
     for i in range(0,len(ip.add_list)):
     	add_index.append(np.argmin(np.abs(chan_freqs-ip.add_list[i])))
     #print add_index
-    kid_idx = np.hstack((kid_idx,add_index))
+    if len(add_index)>0:
+    	kid_idx = np.hstack((kid_idx,add_index))
     kid_idx = kid_idx[np.argsort(kid_idx)]
     #print kid_idx
     plt.figure(5,figsize = (16,6))
