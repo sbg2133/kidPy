@@ -302,7 +302,7 @@ def vnaSweep(ri, udp, valon):
         valon.set_frequency(LO, freq/1.0e6)
         #print "LO freq =", valon.get_frequency(LO)
         #time.sleep(0.1)
-        udp.saveSweepData(Navg, sweep_dir, freq, Nchan)
+        udp.saveSweepData(Navg, sweep_dir, freq, Nchan,skip_packets = 10)
         #time.sleep(0.1)
     valon.set_frequency(LO, center_freq) # LO
     return
@@ -437,7 +437,7 @@ def targetSweep(ri, udp, valon,**keywords):
         print 'LO freq =', freq/1.0e6, ' MHz'
         valon.set_frequency(LO, freq/1.0e6)
         #time.sleep(0.1)
-        udp.saveSweepData(Navg, sweep_dir, freq, len(target_freqs)) 
+        udp.saveSweepData(Navg, sweep_dir, freq, len(target_freqs),skip_packets = 10) 
         #time.sleep(0.1)
     valon.set_frequency(LO, center_freq)
     return
@@ -1123,7 +1123,7 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 break
             try:
 		prompt = raw_input("what is the filename of the script to be executed: ")
-		execfile("./scripts/"+prompt,locals())
+		execfile("./scripts/"+prompt)
             except KeyboardInterrupt:
                 pass
         if opt == 17:
