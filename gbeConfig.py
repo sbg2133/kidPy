@@ -225,7 +225,7 @@ class roachDownlink(object):
             except TypeError:
                 continue
             if not np.size(data):
-                continue
+                continue 
             daddr = np.fromstring(header[30:34], dtype = "<I")
             daddr = sock.inet_ntoa(daddr) # dest addr
             smac = np.fromstring(header[6:12], dtype = "<B")
@@ -233,7 +233,7 @@ class roachDownlink(object):
             src = np.fromstring(header[34:36], dtype = ">H")[0]
             dst = np.fromstring(header[36:38], dtype = ">H")[0]
             ### Parse packet data ###
-            roach_checksum = (np.fromstring(packet[40:42],dtype = '>I'))
+            roach_checksum = (np.fromstring(packet[40:42],dtype = '>H'))
             sec_ts = (np.fromstring(packet[-16:-12],dtype = '>I')) # seconds elapsed since 'pps_start'
             fine_ts = np.round((np.fromstring(packet[-12:-8],dtype = '>I').astype('float')/256.0e6)*1.0e3,3) # milliseconds since last packet
             packet_count = (np.fromstring(packet[-8:-4],dtype = '>I')) # raw packet count since 'pps_start'

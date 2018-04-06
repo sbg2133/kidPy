@@ -33,10 +33,10 @@ dds_shift 318
 header_len 42 
 
 # Destination IP for UDP packets 
-udp_dest_ip 192.168.41.2
+udp_dest_ip 192.168.41.1
 
 # Ethernet device handle corresponding udp_dest_ip (see: ifconfig)
-udp_dest_device eth2
+udp_dest_device eth1
 
 # Destination port on eth2 (you choose)
 udp_dst_port 60000
@@ -51,7 +51,7 @@ udp_src_port 60002
 udp_src_mac 02440102110E
 
 # UDP destination MAC address (you choose)
-udp_dest_mac 681CA2123652 
+udp_dest_mac 803F5D096B1D 
 
 ROACH PARAMS
 
