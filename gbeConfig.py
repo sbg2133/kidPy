@@ -14,7 +14,9 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-import os, sys
+import os
+import sys
+import multiprocessing as mp
 import numpy as np
 import socket as sock
 import time
@@ -22,6 +24,76 @@ import struct
 import select
 import errno
 import pygetdata as gd
+
+
+def parseChanData(chan, data):
+    """Parses packet data into I, Q, and phase
+       inputs:
+           int chan: Channel to parse
+           float data: Array of packet data
+       outputs:
+           float I: I values for channel
+           float Q: Q values for channel"""
+    if (chan % 2) > 0:
+        I = data[1024 + ((chan - 1) / 2)]
+        Q = data[1536 + ((chan - 1) / 2)]
+    else:
+        I = data[0 + (chan/2)]
+        Q = data[512 + (chan/2)]
+    return I, Q, np.arctan2([Q],[I])
+
+
+def writer(q, filename, start_chan, end_chan): #Haven't tested recently, but as 
+    #of a few years ago, functions passed to multiprocessing need to be top
+    #level functions
+    chan_range = range(start_chan, end_chan + 1)
+    nfo_I = map(lambda z: filename + "/I_" + str(z), chan_range)
+    nfo_Q = map(lambda z: filename + "/Q_" + str(z), chan_range)
+
+    # make the dirfile
+    d = gd.dirfile(filename,gd.CREAT|gd.RDWR|gd.UNENCODED)
+    # add fields
+    I_fields = []
+    Q_fields = []
+    for chan in chan_range:
+        I_fields.append('I_' + str(chan))
+        Q_fields.append('Q_' + str(chan))
+        d.add_spec('I_' + str(chan) + ' RAW FLOAT64 1')
+        d.add_spec('Q_' + str(chan) + ' RAW FLOAT64 1')
+    d.close()
+    d = gd.dirfile(filename,gd.RDWR|gd.UNENCODED)
+    fo_I = map(lambda z: open(z, "ab"), nfo_I)
+    fo_Q = map(lambda z: open(z, "ab"), nfo_Q)
+    fo_time = open(filename + "/time", "ab")
+    fo_count = open(filename + "/packet_count", "ab")
+    streaming = True
+    while streaming:
+        q_data = q.get()
+        if q_data is not None:
+            data, packet_count, ts = q_data
+            for idx, chan in enumerate(range(start_chan, end_chan + 1)):
+                I, Q, __ = parseChanData(chan, data)
+                fo_I[idx].write(struct.pack('d', I))
+                fo_Q[idx].write(struct.pack('d', Q))
+            fo_count.write(struct.pack('L',packet_count))
+            fo_time.write(struct.pack('d', ts))
+        else:
+            streaming = False
+            fo_count.flush()
+            fo_time.flush()
+            for idx in range(len(fo_I)):
+                fo_I[idx].flush()
+                fo_Q[idx].flush()
+
+
+    for idx in range(len(fo_I)):
+         fo_I[idx].close()
+         fo_Q[idx].close()
+    fo_time.close()
+    fo_count.close()
+    d.close()
+    return
+
 
 class roachDownlink(object):
     """Object for handling Roach2 UDP downlink"""
@@ -53,7 +125,11 @@ class roachDownlink(object):
     def configSocket(self):
         """Configure socket parameters"""
         try:
-            self.s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, self.buf_size)
+            #self.s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, self.buf_size)
+            #get max buffer size, buffers are good for not dropping packets
+            with open('/proc/sys/net/core/rmem_max', 'r') as f:
+                buf_max = int(f.readline())
+            self.s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, buf_max)
             self.s.bind((self.gc[np.where(self.gc == 'udp_dest_device')[0][0]][1], 3))
         except sock.error, v:
             errorcode = v[0]
@@ -405,6 +481,7 @@ class roachDownlink(object):
         d.close()
         return
 
+
     def saveDirfile_chanRangeIQ(self, time_interval, stage_coords = False):
         """Saves a dirfile containing the I and Q values for a range of channels, streamed
            over a time interval specified by time_interval
@@ -424,53 +501,33 @@ class roachDownlink(object):
         filename = save_path + '/' + \
                    str(int(time.time())) + '-' + time.strftime('%b-%d-%Y-%H-%M-%S') + '.dir'
         print filename
-        # make the dirfile
-        d = gd.dirfile(filename,gd.CREAT|gd.RDWR|gd.UNENCODED)
-        # add fields
-        I_fields = []
-        Q_fields = []
-        for chan in chan_range:
-            I_fields.append('I_' + str(chan))
-            Q_fields.append('Q_' + str(chan))
-            d.add_spec('I_' + str(chan) + ' RAW FLOAT64 1')
-            d.add_spec('Q_' + str(chan) + ' RAW FLOAT64 1')
-        d.close()
-        d = gd.dirfile(filename,gd.RDWR|gd.UNENCODED)
-        nfo_I = map(lambda z: filename + "/I_" + str(z), chan_range)
-        nfo_Q = map(lambda z: filename + "/Q_" + str(z), chan_range)
-        fo_I = map(lambda z: open(z, "ab"), nfo_I)
-        fo_Q = map(lambda z: open(z, "ab"), nfo_Q)
-        fo_time = open(filename + "/time", "ab")
-        fo_count = open(filename + "/packet_count", "ab")
-        count = 0
-        while count < Npackets:
-            ts = time.time()
-            try:
-                packet, data, header, saddr = self.parsePacketData()
-                if not packet:
+        #begin Async stuff
+        manager = mp.Manager()
+        pool = mp.Pool(1)
+        write_Q = manager.Queue()
+        pool.apply_async(writer, (write_Q, filename, start_chan, end_chan))
+
+        try:
+            count = 0
+            while count < Npackets:
+                ts = time.time()
+                try:
+                    packet, data, header, saddr = self.parsePacketData()
+                    if not packet:
+                        continue
+                #### Add field for stage coords ####
+                except TypeError:
                     continue
-            #### Add field for stage coords ####
-            except TypeError:
-                continue
-            packet_count = (np.fromstring(packet[-4:],dtype = '>I'))
-            idx = 0
-            for chan in range(start_chan, end_chan + 1):
-                I, Q, __ = self.parseChanData(chan, data)
-                fo_I[idx].write(struct.pack('d', I))
-                fo_Q[idx].write(struct.pack('d', Q))
-                fo_I[idx].flush()
-                fo_Q[idx].flush()
-                idx += 1
-            fo_count.write(struct.pack('L',packet_count))
-            fo_count.flush()
-            fo_time.write(struct.pack('d', ts))
-            fo_time.flush()
-            count += 1
-        for idx in range(len(fo_I)):
-             fo_I[idx].close()
-             fo_Q[idx].close()
-        fo_time.close()
-        fo_count.close()
-        d.close()
+                packet_count = (np.fromstring(packet[-4:],dtype = '>I'))
+                write_Q.put((data, packet_count, ts))
+                count += 1
+        except KeyboardInterrupt:
+            #making sure stuff still gets written if ctl-c pressed
+            pass
+        finally:
+            write_Q.put(None) #tell the writing function to finish up
+            pool.close()
+            pool.join()
+
         return
 
