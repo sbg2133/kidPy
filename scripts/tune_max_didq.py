@@ -5,4 +5,4 @@ import numpy as np
 #of the resonator. Run target sweep before this
 
 filename = str(np.load("last_targ_dir.npy"))
-tune_kids.tune_kids(filename,ri,regs,fpga,min = False)
+tune_kids.tune_kids(filename,ri,regs,fpga,find_min = False,interactive = True,look_around = 30)

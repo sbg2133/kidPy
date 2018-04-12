@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
 import pygetdata as gd
+import targplot
 plt.ion()
 
 ################################################################
@@ -507,11 +508,11 @@ def plotVNASweep(path):
     plt.savefig(os.path.join(path,'vna_sweep.png'), dpi = 100, bbox_inches = 'tight')
     return
 """
-def plotTargSweep(path):
+def plotTargSweep(path,interactive = True):
     """Plots the results of a TARG sweep
        inputs:
            path: Absolute path to where sweep data is saved"""
-    plt.figure()
+   
     Is, Qs = openStoredSweep(path)
     sweep_freqs = np.load(path + '/sweep_freqs.npy')
     bb_freqs = np.load(path + '/bb_freqs.npy')
@@ -527,13 +528,17 @@ def plotTargSweep(path):
     #bb_freqs = np.concatenate(bb_freqs[len(b_freqs)/2:],bb_freqs[:len(bb_freqs)/2]))
     chan_freqs = np.concatenate((chan_freqs[len(chan_freqs)/2:],chan_freqs[:len(chan_freqs)/2]))
     new_targs = [chan_freqs[chan][np.argmin(mags[chan])] for chan in range(channels)]
-    for chan in range(channels):
-        plt.plot(chan_freqs[chan],mags[chan])
-    plt.title(path, size = 16)
-    plt.xlabel('frequency (MHz)', size = 16)
-    plt.ylabel('dB', size = 16)
-    plt.tight_layout()
-    plt.savefig(os.path.join(path,'targ_sweep.png'), dpi = 100, bbox_inches = 'tight')
+    if interactive:
+	ip = targplot.interactive_plot(Is,Qs,chan_freqs)
+    else:
+	plt.figure()
+    	for chan in range(channels):
+            plt.plot(chan_freqs[chan],mags[chan])
+    	plt.title(path, size = 16)
+    	plt.xlabel('frequency (MHz)', size = 16)
+    	plt.ylabel('dB', size = 16)
+    	plt.tight_layout()
+    	plt.savefig(os.path.join(path,'targ_sweep.png'), dpi = 100, bbox_inches = 'tight')
     return
 
 def plotLastVNASweep():
