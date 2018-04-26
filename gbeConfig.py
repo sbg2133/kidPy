@@ -72,7 +72,11 @@ def writer(q, filename, start_chan, end_chan): #Haven't tested recently, but as
         if q_data is not None:
             data, packet_count, ts = q_data
             for idx, chan in enumerate(range(start_chan, end_chan + 1)):
-                I, Q, __ = parseChanData(chan, data)
+                #I, Q, __ = parseChanData(chan, data)
+                #the function call to parseChanData was providing a botleneck
+                #for streaming with large number of channels(found with 166)
+                I = data[1024 * (chan % 2) + (chan // 2)]
+                Q = data[512 + 1024 * (chan % 2) + (chan // 2)]
                 fo_I[idx].write(struct.pack('d', I))
                 fo_Q[idx].write(struct.pack('d', Q))
             fo_count.write(struct.pack('L',packet_count))
