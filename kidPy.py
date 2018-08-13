@@ -30,6 +30,7 @@ import pygetdata as gd
 import targplot
 plt.ion()
 
+
 ################################################################
 # Run in IPYTHON as: %run kidPy
 
@@ -83,6 +84,9 @@ def systemInit():
     time.sleep(0.3)
     # UDP socket
     s = socket(AF_PACKET, SOCK_RAW, htons(3))
+    with open('/proc/sys/net/core/rmem_max', 'r') as f:
+        buf_max = int(f.readline())
+    s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, buf_max)
     # UDP object
     udp = roachDownlink(ri, fpga, gc, regs, s, ri.accum_freq)
     try:
@@ -284,7 +288,7 @@ def vnaSweep(ri, udp, valon):
     os.mkdir(sweep_dir)
     np.save("./last_vna_dir.npy", sweep_dir)
     print sweep_dir
-    valon.set_frequency(LO, center_freq/1.0e6)
+    valon.set_frequency(LO, center_freq)
     span = ri.pos_delta
     print "Sweep Span =", 2*np.round(ri.pos_delta,2), "Hz"
     start = center_freq*1.0e6 - (span)
@@ -302,8 +306,8 @@ def vnaSweep(ri, udp, valon):
         print 'LO freq =', freq/1.0e6
         valon.set_frequency(LO, freq/1.0e6)
         #print "LO freq =", valon.get_frequency(LO)
-        #time.sleep(0.1)
-        udp.saveSweepData(Navg, sweep_dir, freq, Nchan,skip_packets = 10)
+        #time.sleep(0.1) 
+        udp.saveSweepData(Navg, sweep_dir, freq, Nchan,skip_packets = 25)
         #time.sleep(0.1)
     valon.set_frequency(LO, center_freq) # LO
     return
@@ -368,7 +372,7 @@ def vnaSweepConsole():
     os.mkdir(sweep_dir)
     np.save("./last_vna_dir.npy", sweep_dir)
     print sweep_dir
-    valon.set_frequency(LO, center_freq/1.0e6)
+    valon.set_frequency(LO, center_freq)
     span = ri.pos_delta
     print "Sweep Span =", 2*np.round(ri.pos_delta,2), "Hz"
     start = center_freq*1.0e6 - (span)
@@ -388,7 +392,7 @@ def vnaSweepConsole():
         valon.set_frequency(LO, sweep_freqs[idx]/1.0e6)
         time.sleep(0.2)
         #time.sleep(0.1)
-        if (udp.saveSweepData(Navg, sweep_dir, sweep_freqs[idx], Nchan) < 0):
+        if (udp.saveSweepData(Navg, sweep_dir, sweep_freqs[idx], Nchan,skip_packets = 25) < 0):
             continue
         else:
             idx += 1
@@ -427,6 +431,7 @@ def targetSweep(ri, udp, valon,**keywords):
     np.save("./last_targ_dir.npy", sweep_dir)
     print sweep_dir
     target_freqs = np.load(vna_savepath + '/bb_targ_freqs.npy')
+    #target_freqs = np.load("last_freq_comb.npy")
     np.save(sweep_dir + '/bb_target_freqs.npy', target_freqs)
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
@@ -434,11 +439,12 @@ def targetSweep(ri, udp, valon,**keywords):
     sweep_freqs = np.round(sweep_freqs/lo_step_targ)*lo_step_targ
     np.save(sweep_dir + '/bb_freqs.npy', target_freqs)
     np.save(sweep_dir + '/sweep_freqs.npy',sweep_freqs)
+    first = True
     for freq in sweep_freqs:
         print 'LO freq =', freq/1.0e6, ' MHz'
         valon.set_frequency(LO, freq/1.0e6)
         #time.sleep(0.1)
-        udp.saveSweepData(Navg, sweep_dir, freq, len(target_freqs),skip_packets = 10) 
+        udp.saveSweepData(Navg, sweep_dir, freq, len(target_freqs),skip_packets = 25)
         #time.sleep(0.1)
     valon.set_frequency(LO, center_freq)
     return
@@ -526,8 +532,8 @@ def plotTargSweep(path,interactive = True):
         chan_freqs[chan] = (sweep_freqs + bb_freqs[chan])/1.0e6
     mags = np.concatenate((mags[len(mags)/2:],mags[:len(mags)/2]))
     #bb_freqs = np.concatenate(bb_freqs[len(b_freqs)/2:],bb_freqs[:len(bb_freqs)/2]))
-    chan_freqs = np.concatenate((chan_freqs[len(chan_freqs)/2:],chan_freqs[:len(chan_freqs)/2]))
-    new_targs = [chan_freqs[chan][np.argmin(mags[chan])] for chan in range(channels)]
+    #chan_freqs = np.concatenate((chan_freqs[len(chan_freqs)/2:],chan_freqs[:len(chan_freqs)/2]))
+    #new_targs = [chan_freqs[chan][np.argmin(mags[chan])] for chan in range(channels)]
     if interactive:
 	ip = targplot.interactive_plot(Is,Qs,chan_freqs)
     else:
@@ -1204,7 +1210,7 @@ def main():
     try:
         valon = valon_synth9.Synthesizer(gc[np.where(gc == 'valon_comm_port')[0][0]][1])
     except OSError:
-        "Valon could not be initialized. Check comm port and power supply."
+        print("Valon could not be initialized. Check comm port and power supply.")
 
     # Roach interface
     ri = roachInterface(fpga, gc, regs, valon)

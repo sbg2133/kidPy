@@ -26,6 +26,7 @@ import errno
 import pygetdata as gd
 
 
+
 def parseChanData(chan, data):
     """Parses packet data into I, Q, and phase
        inputs:
@@ -46,6 +47,9 @@ def parseChanData(chan, data):
 def writer(q, filename, start_chan, end_chan): #Haven't tested recently, but as 
     #of a few years ago, functions passed to multiprocessing need to be top
     #level functions
+    pid = os.getpid()
+    cmd = "renice -n 19 -p "+str(pid)
+    os.system(cmd)#renice the writer so it doesn't eat up cpu from the packet grabber
     chan_range = range(start_chan, end_chan + 1)
     nfo_I = map(lambda z: filename + "/I_" + str(z), chan_range)
     nfo_Q = map(lambda z: filename + "/Q_" + str(z), chan_range)
@@ -67,12 +71,17 @@ def writer(q, filename, start_chan, end_chan): #Haven't tested recently, but as
     fo_time = open(filename + "/time", "ab")
     fo_count = open(filename + "/packet_count", "ab")
     streaming = True
+    count = 0
     while streaming:
         q_data = q.get()
         if q_data is not None:
             data, packet_count, ts = q_data
             for idx, chan in enumerate(range(start_chan, end_chan + 1)):
-                I, Q, __ = parseChanData(chan, data)
+                #I, Q, __ = parseChanData(chan, data)
+                #the function call to parseChanData was providing a botleneck
+                #for streaming with large number of channels(found with 166)
+                I = data[(chan % 2) * 1024 + (chan / 2)]
+                Q = data[512 + (chan % 2) * 1024 + (chan / 2)]
                 fo_I[idx].write(struct.pack('d', I))
                 fo_Q[idx].write(struct.pack('d', Q))
             fo_count.write(struct.pack('L',packet_count))
@@ -84,7 +93,15 @@ def writer(q, filename, start_chan, end_chan): #Haven't tested recently, but as
             for idx in range(len(fo_I)):
                 fo_I[idx].flush()
                 fo_Q[idx].flush()
-
+        count += 1
+        if count % 1000 == 0:
+            fo_count.flush()
+            fo_time.flush()
+            for idx in range(len(fo_I)):
+                fo_I[idx].flush()
+                fo_Q[idx].flush()
+        if count % 3000 == 0:
+            print(q.qsize())
 
     for idx in range(len(fo_I)):
          fo_I[idx].close()
@@ -122,6 +139,7 @@ class roachDownlink(object):
         self.udp_destmac1 = int(dest_mac[0:4], 16)
         self.udp_destmac0 = int(dest_mac[4:], 16)
 
+        
     def configSocket(self):
         """Configure socket parameters"""
         try:
@@ -129,6 +147,7 @@ class roachDownlink(object):
             #get max buffer size, buffers are good for not dropping packets
             with open('/proc/sys/net/core/rmem_max', 'r') as f:
                 buf_max = int(f.readline())
+            self.buf_max = buf_max
             self.s.setsockopt(sock.SOL_SOCKET, sock.SO_RCVBUF, buf_max)
             self.s.bind((self.gc[np.where(self.gc == 'udp_dest_device')[0][0]][1], 3))
         except sock.error, v:
@@ -138,6 +157,19 @@ class roachDownlink(object):
                 pass
         return
 
+    def empty_buffer(self):
+        count = 0
+        while True:
+            read,write,error = select.select([self.s],[],[],0)
+            if len(read) == 0: #buffer empty
+                #print("buffer emptied it contained")
+                #print(count)
+                #print("packets")
+                break
+            for s in read: packet = self.s.recv(self.buf_size)
+            count = count+1
+
+    
     def configDownlink(self):
         """Configure GbE parameters"""
         
@@ -179,6 +211,7 @@ class roachDownlink(object):
             for s in read:
                 packet = self.s.recv(self.buf_size)
                 if len(packet) != self.buf_size:
+                    print('{0} / {1}'.format(len(packet), self.buf_size))
                     packet = []
         return packet
 
@@ -206,15 +239,17 @@ class roachDownlink(object):
         time.sleep(0.1)
         return
 
-    def parsePacketData(self):
+    def parsePacketData(self, packet=False):
         """Parses packet data, filters reception based on source IP
            outputs:
                packet: The original data packet
                float data: Array of channel data
                header: String packed IP/ETH header
                saddr: The packet source address"""
-        packet = self.waitForData()
+        if packet is not None and not packet:
+            packet = self.waitForData()
         if not packet:
+            print "no packet"
             print "Non-Roach packet received"
             return
         data = np.fromstring(packet[self.header_len:], dtype = '<i').astype('float')
@@ -223,6 +258,7 @@ class roachDownlink(object):
         saddr = sock.inet_ntoa(saddr) # source addr
         ### Filter on source IP ###
         if (saddr != self.gc[np.where(self.gc == 'udp_src_ip')[0][0]][1]):
+            print "wrong address"
             print "Non-Roach packet received"
             return
         return packet, data, header, saddr
@@ -334,7 +370,7 @@ class roachDownlink(object):
             previous_idx = packet_count
         return
 
-    def saveSweepData(self, Navg, savepath, lo_freq, Nchan, skip_packets = 0):
+    def saveSweepData(self, Navg, savepath, lo_freq, Nchan, skip_packets = None):
         """Saves sweep data as .npy in path specified at savepath
            inputs:
                int Navg: Number of data points to average at each sweep step
@@ -347,15 +383,18 @@ class roachDownlink(object):
         Q_buffer = np.empty((Navg + skip_packets, Nchan))
         self.zeroPPS()
         count = 0
+        self.empty_buffer()
         while count < Navg + skip_packets:
             try:
                 packet, data, header, saddr = self.parsePacketData()
                 if not packet:
                     print "Packet error"
-                    return -1
+                    #return -1
+                    continue #skip that packet
                 if not np.size(data):
                     print "Packet error"
-                    return -1
+                    #return -1
+                    continue #skip that packet
                 odd_chan = channels[1::2]
                 even_chan = channels[0::2]
                 I_odd = data[1024 + ((odd_chan - 1) / 2)]
@@ -378,14 +417,15 @@ class roachDownlink(object):
                     Q = np.hstack(zip(Q_even, Q_odd))
                 I_buffer[count] = I
                 Q_buffer[count] = Q
-                count += 1
                 I_file = 'I' + str(lo_freq)
                 Q_file = 'Q' + str(lo_freq)
                 np.save(os.path.join(savepath,I_file), np.mean(I_buffer[skip_packets:], axis = 0))
                 np.save(os.path.join(savepath,Q_file), np.mean(Q_buffer[skip_packets:], axis = 0))
+                count += 1
             except TypeError:
                 print "Packet error"
-                return -1
+                #return -1
+                continue
         return 0
 
     def saveDirfile_adcIQ(self, time_interval):
@@ -482,17 +522,26 @@ class roachDownlink(object):
         return
 
 
-    def saveDirfile_chanRangeIQ(self, time_interval, stage_coords = False):
+    def saveDirfile_chanRangeIQ(self, time_interval, stage_coords = False, **keywords):
         """Saves a dirfile containing the I and Q values for a range of channels, streamed
            over a time interval specified by time_interval
            inputs:
                float time_interval: Time interval to integrate over, seconds
                bool stage_coords: Currently deprecated, to be used when beam mapping"""
-        start_chan = input("Start chan # ? ")
-        end_chan = input("End chan # ? ")
+        if ('start_chan' in keywords):
+            start_chan = keywords['start_chan']
+        else:
+            start_chan = input("Start chan # ? ")
+        if ('end_chan' in keywords):
+            end_chan = keywords['end_chan']
+        else:
+            end_chan = input("End chan # ? ")
         chan_range = range(start_chan, end_chan + 1)
-        data_path = self.gc[np.where(self.gc == 'DIRFILE_SAVEPATH')[0][0]][1] 
-        sub_folder = raw_input("Insert subfolder name (e.g. single_tone): ")
+        data_path = self.gc[np.where(self.gc == 'DIRFILE_SAVEPATH')[0][0]][1]
+        if ('sub_folder' in keywords):
+            sub_folder = keywords['sub_folder']
+        else:
+            sub_folder = raw_input("Insert subfolder name (e.g. single_tone): ")
         Npackets = int(np.ceil(time_interval * self.data_rate))
         self.zeroPPS()
         save_path = os.path.join(data_path, sub_folder)
@@ -506,9 +555,9 @@ class roachDownlink(object):
         pool = mp.Pool(1)
         write_Q = manager.Queue()
         pool.apply_async(writer, (write_Q, filename, start_chan, end_chan))
-
         try:
             count = 0
+            self.empty_buffer()
             while count < Npackets:
                 ts = time.time()
                 try:
@@ -518,7 +567,7 @@ class roachDownlink(object):
                 #### Add field for stage coords ####
                 except TypeError:
                     continue
-                packet_count = (np.fromstring(packet[-4:],dtype = '>I'))
+                packet_count = (np.fromstring(packet[-8:-4],dtype = '>I'))
                 write_Q.put((data, packet_count, ts))
                 count += 1
         except KeyboardInterrupt:
