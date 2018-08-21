@@ -61,6 +61,9 @@ freq_list 250um_array.npy
 # LO step size to be used during VNA/TARG sweeps, Hz
 lo_step 1.0e3
 
+#span of target scan
+targ_span 500e3
+
 # LO center frequency, MHz
 center_freq 828.0
 
@@ -68,6 +71,9 @@ COMB PARAMS
 
 # Number of frequencies in test comb
 Nfreq 1000
+
+#Number of averages
+Navg 348
 
 # Maximum positive frequency, Hz
 max_pos_freq 246.001234e6
