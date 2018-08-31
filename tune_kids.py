@@ -132,7 +132,6 @@ class interactive_plot(object):
         if event.key == 'shift':
                 self.shift_is_held = True
                 #print("shift pressed")
-
     def on_key_release(self,event):
         if event.key == "shift":
             self.shift_is_held = False

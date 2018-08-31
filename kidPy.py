@@ -18,6 +18,7 @@ import numpy as np
 import sys, os
 import struct
 import casperfpga
+#import valon_synth9_wind as valon_synth9
 import valon_synth9
 from socket import *
 from roachInterface import roachInterface
@@ -327,6 +328,7 @@ def writeVnaComb(cw = False):
 	    ri.makeFreqComb()
         if (len(ri.freq_comb) > 400):                                             
             fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**5 -1)
+
             time.sleep(0.1)                                                     
         else:                                                                   
             fpga.write_int(regs[np.where(regs == 'fft_shift_reg')[0][0]][1], 2**9 -1)
@@ -430,8 +432,8 @@ def targetSweep(ri, udp, valon,**keywords):
     os.mkdir(sweep_dir)
     np.save("./last_targ_dir.npy", sweep_dir)
     print sweep_dir
-    target_freqs = np.load(vna_savepath + '/bb_targ_freqs.npy')
-    #target_freqs = np.load("last_freq_comb.npy")
+    #target_freqs = np.load(vna_savepath + '/bb_targ_freqs.npy')
+    target_freqs = np.load("./last_freq_comb.npy")
     np.save(sweep_dir + '/bb_target_freqs.npy', target_freqs)
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
@@ -878,6 +880,7 @@ def findFreqs(path, plot = False):
     if len(bb_target_freqs) > 0:
         bb_target_freqs = np.roll(bb_target_freqs, - np.argmin(np.abs(bb_target_freqs)) - 1)
         np.save(path + '/bb_targ_freqs.npy', bb_target_freqs)
+        np.save('./last_freq_comb.npy', bb_target_freqs)
         print len(rf_target_freqs), "KIDs found:\n"
         print rf_target_freqs
     else:
@@ -1081,6 +1084,7 @@ def main_opt(fpga, ri, udp, valon, upload_status):
                 break
             try:
                 freq_comb = np.load(os.path.join(str(np.load('last_vna_dir.npy')), 'bb_targ_freqs.npy'))
+                #freq_comb = np.load('./last_freq_comb.npy')
                 freq_comb = freq_comb[freq_comb != 0]
                 freq_comb = np.roll(freq_comb, - np.argmin(np.abs(freq_comb)) - 1)
                 ri.freq_comb = freq_comb
