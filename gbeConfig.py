@@ -302,6 +302,7 @@ class roachDownlink(object):
         Is = np.zeros(Npackets)
         Qs = np.zeros(Npackets)
         count = 0
+        self.empty_buffer()
         while count < Npackets:
             try:
                 packet, data, header, saddr = self.parsePacketData()
@@ -419,8 +420,13 @@ class roachDownlink(object):
                 Q_buffer[count] = Q
                 I_file = 'I' + str(lo_freq)
                 Q_file = 'Q' + str(lo_freq)
+                I_std_file = 'stdI' + str(lo_freq)
+                Q_std_file = 'stdQ' + str(lo_freq)
                 np.save(os.path.join(savepath,I_file), np.mean(I_buffer[skip_packets:], axis = 0))
                 np.save(os.path.join(savepath,Q_file), np.mean(Q_buffer[skip_packets:], axis = 0))
+                if Navg>1:
+                    np.save(os.path.join(savepath,I_std_file), np.std(I_buffer[skip_packets:], axis = 0)/np.sqrt(Navg))
+                    np.save(os.path.join(savepath,Q_std_file), np.std(Q_buffer[skip_packets:], axis = 0)/np.sqrt(Navg))
                 count += 1
             except TypeError:
                 print "Packet error"
