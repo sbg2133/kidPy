@@ -48,6 +48,9 @@ class interactive_plot(object):
 	self.targ_size = chan_freqs.shape[0]
 	self.look_around = look_around
         self.plot_index = 0
+        self.res_index_overide = np.asarray((),dtype = np.int16)
+        self.overide_freq_index = np.asarray((),dtype = np.int16)
+        self.shift_is_held = False
 	if self.find_min:
 		self.min_index = np.argmin(self.Is[self.targ_size/2-self.look_around:self.targ_size/2+self.look_around]**2+self.Qs[self.targ_size/2-self.look_around:self.targ_size/2+look_around]**2,axis = 0) +(self.targ_size/2-look_around)
 	else:
@@ -60,8 +63,8 @@ class interactive_plot(object):
 	self.ax2.set_ylabel("Q")
 	self.ax2.set_xlabel("I")
         self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
-        #self.fig.canvas.mpl_connect('key_release_event', self.on_key_release)
-        #self.fig.canvas.mpl_connect('button_press_event', self.onClick)
+        self.fig.canvas.mpl_connect('key_release_event', self.on_key_release)
+        self.fig.canvas.mpl_connect('button_press_event', self.onClick)
 	self.l1, = self.ax.plot(self.chan_freqs[:,self.plot_index],10*np.log10(self.Is[:,self.plot_index]**2+self.Qs[:,self.plot_index]**2),'o')
 	self.l2, = self.ax2.plot(self.Is[:,self.plot_index],Qs[:,self.plot_index],'o')
 	self.p1, = self.ax.plot(self.chan_freqs[self.min_index[self.plot_index],self.plot_index],10*np.log10(self.Is[self.min_index[self.plot_index],self.plot_index]**2+self.Qs[self.min_index[self.plot_index],self.plot_index]**2),'*',markersize = 15)
@@ -72,17 +75,26 @@ class interactive_plot(object):
         print("Interactive Resonance Tuning Activated")
         print("Use left and right arrows to switch between resonators")
 	print("Use the up and down arrows to change look around points")
+        print("Hold shift and right click on the magnitude plot to overide tone position")
 	plt.show(block = True)
 
     def refresh_plot(self):
         self.l1.set_data(self.chan_freqs[:,self.plot_index],10*np.log10(self.Is[:,self.plot_index]**2+self.Qs[:,self.plot_index]**2))
-	self.p1.set_data(self.chan_freqs[self.min_index[self.plot_index],self.plot_index],10*np.log10(self.Is[self.min_index[self.plot_index],self.plot_index]**2+self.Qs[self.min_index[self.plot_index],self.plot_index]**2))
+        if (self.res_index_overide == self.plot_index).any():
+            index = np.argwhere(self.res_index_overide == self.plot_index)[0][0]
+            #print("index is",index)
+            self.p1.set_data(self.chan_freqs[self.overide_freq_index[index],self.plot_index],10*np.log10(self.Is[self.overide_freq_index[index],self.plot_index]**2+self.Qs[self.overide_freq_index[index],self.plot_index]**2))
+        else:
+            self.p1.set_data(self.chan_freqs[self.min_index[self.plot_index],self.plot_index],10*np.log10(self.Is[self.min_index[self.plot_index],self.plot_index]**2+self.Qs[self.min_index[self.plot_index],self.plot_index]**2))
         self.ax.relim()
         self.ax.autoscale()
         self.ax.set_title("Resonator Index "+str(self.plot_index))
 	self.ax2.set_title("Look Around Points "+str(self.look_around))
 	self.l2.set_data((self.Is[:,self.plot_index],self.Qs[:,self.plot_index]))
-	self.p2.set_data(self.Is[self.min_index[self.plot_index],self.plot_index],self.Qs[self.min_index[self.plot_index],self.plot_index])
+        if (self.res_index_overide == self.plot_index).any():
+	    self.p2.set_data(self.Is[self.overide_freq_index[index],self.plot_index],self.Qs[self.overide_freq_index[index],self.plot_index])
+        else:
+            self.p2.set_data(self.Is[self.min_index[self.plot_index],self.plot_index],self.Qs[self.min_index[self.plot_index],self.plot_index])
         self.ax2.relim()
         self.ax2.autoscale()
         plt.draw()
@@ -117,7 +129,37 @@ class interactive_plot(object):
 			self.min_index = find_max_didq(self.Is,self.Qs,self.look_around)
 		self.refresh_plot()
 
+        if event.key == 'shift':
+                self.shift_is_held = True
+                #print("shift pressed")
 
+    def on_key_release(self,event):
+        if event.key == "shift":
+            self.shift_is_held = False
+            #print("shift released")
+
+    def onClick(self,event):
+        if event.button == 3:
+            if self.shift_is_held:
+                print("overiding point selection",event.xdata)
+                #print(self.chan_freqs[:,self.plot_index][50])
+                #print((self.res_index_overide == self.plot_index).any())
+                if (self.res_index_overide == self.plot_index).any():
+                    replace_index = np.argwhere(self.res_index_overide == self.plot_index)[0][0]
+                    new_freq = np.argmin(np.abs(event.xdata-self.chan_freqs[:,self.plot_index]))
+                    self.overide_freq_index[replace_index] = np.int(new_freq)
+                                                                        
+                else:
+                    self.res_index_overide = np.append(self.res_index_overide,np.int(np.asarray(self.plot_index)))
+                    #print(self.res_index_overide)
+                    new_freq = np.argmin(np.abs(event.xdata-self.chan_freqs[:,self.plot_index]))
+                    #print("new index is ",new_freq)
+                    self.overide_freq_index = np.append(self.overide_freq_index,np.int(np.asarray(new_freq)))
+                    #print(self.overide_freq_index)
+                    
+                self.refresh_plot()
+
+            
 def tune_kids(filename,ri,regs,fpga,find_min = True,interactive = False, **kwargs):
 	iq_dict = read_iq_sweep(filename)
 	if "look_around" in kwargs:
@@ -129,6 +171,8 @@ def tune_kids(filename,ri,regs,fpga,find_min = True,interactive = False, **kwarg
 		print("centering on minimum")
 		if interactive:
 			ip = interactive_plot(iq_dict['I'],iq_dict['Q'],iq_dict['freqs'],look_around)
+                        for i in range(0,len(ip.res_index_overide)):
+                            ip.min_index[ip.res_index_overide[i]] = ip.overide_freq_index[i]
 			new_freqs = iq_dict['freqs'][(ip.min_index,np.arange(0,iq_dict['freqs'].shape[1]))]
 		else:
 			min_index = np.argmin(iq_dict['I']**2+iq_dict['Q']**2,axis = 0)
@@ -137,6 +181,8 @@ def tune_kids(filename,ri,regs,fpga,find_min = True,interactive = False, **kwarg
 		print("centering on max dIdQ")
 		if interactive:
 			ip = interactive_plot(iq_dict['I'],iq_dict['Q'],iq_dict['freqs'],look_around,find_min = False)
+                        for i in range(0,len(ip.res_index_overide)):
+                            ip.min_index[ip.res_index_overide[i]] = ip.overide_freq_index[i]
 			new_freqs = iq_dict['freqs'][(ip.min_index,np.arange(0,iq_dict['freqs'].shape[1]))]
 		else:
 			min_index = find_max_didq(iq_dict['I'],iq_dict['Q'],look_around)
