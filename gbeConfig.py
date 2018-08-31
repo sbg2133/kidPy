@@ -384,6 +384,7 @@ class roachDownlink(object):
         Q_buffer = np.empty((Navg + skip_packets, Nchan))
         self.zeroPPS()
         count = 0
+        start = time.time()
         self.empty_buffer()
         while count < Navg + skip_packets:
             try:
@@ -418,20 +419,20 @@ class roachDownlink(object):
                     Q = np.hstack(zip(Q_even, Q_odd))
                 I_buffer[count] = I
                 Q_buffer[count] = Q
-                I_file = 'I' + str(lo_freq)
-                Q_file = 'Q' + str(lo_freq)
-                I_std_file = 'stdI' + str(lo_freq)
-                Q_std_file = 'stdQ' + str(lo_freq)
-                np.save(os.path.join(savepath,I_file), np.mean(I_buffer[skip_packets:], axis = 0))
-                np.save(os.path.join(savepath,Q_file), np.mean(Q_buffer[skip_packets:], axis = 0))
-                if Navg>1:
-                    np.save(os.path.join(savepath,I_std_file), np.std(I_buffer[skip_packets:], axis = 0)/np.sqrt(Navg))
-                    np.save(os.path.join(savepath,Q_std_file), np.std(Q_buffer[skip_packets:], axis = 0)/np.sqrt(Navg))
                 count += 1
             except TypeError:
                 print "Packet error"
                 #return -1
                 continue
+        I_file = 'I' + str(lo_freq)
+        Q_file = 'Q' + str(lo_freq)
+        I_std_file = 'stdI' + str(lo_freq)
+        Q_std_file = 'stdQ' + str(lo_freq)
+        np.save(os.path.join(savepath,I_file), np.mean(I_buffer[skip_packets:], axis = 0))
+        np.save(os.path.join(savepath,Q_file), np.mean(Q_buffer[skip_packets:], axis = 0))
+        if Navg>1:
+            np.save(os.path.join(savepath,I_std_file), np.std(I_buffer[skip_packets:], axis = 0)/np.sqrt(Navg))
+            np.save(os.path.join(savepath,Q_std_file), np.std(Q_buffer[skip_packets:], axis = 0)/np.sqrt(Navg))
         return 0
 
     def saveDirfile_adcIQ(self, time_interval):

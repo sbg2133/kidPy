@@ -1,15 +1,15 @@
 # Path to firmware file
-FIRMWARE_FILE ./stable_ctime_v6_2018_Feb_19_1053.fpg
+FIRMWARE_FILE ./stable_ctime_v6_2018_Feb_14_1119.fpg
 
 # Path to sweep directories
-VNA_SAVEPATH ./november2017/vna
-TARG_SAVEPATH ./november2017/targ
+VNA_SAVEPATH ../../data/kidpy_multitone/march2018/vna
+TARG_SAVEPATH ../../data/kidpy_multitone/march2018/targ
 # Path for saved streaming data
-DIRFILE_SAVEPATH /media/user1/FREE/eee505_project_data
+DIRFILE_SAVEPATH /home/superspec/Documents/stream_data/superspec_march/
 
 NETWORK PARAMS
 # IP address of your Roach2 PowerPC
-roach_ppc_ip 192.168.40.70
+roach_ppc_ip 192.168.40.2
 
 # Valon EXT REF flag (1 for external)
 ext_ref 0
@@ -36,7 +36,7 @@ header_len 42
 udp_dest_ip 192.168.41.1
 
 # Ethernet device handle corresponding udp_dest_ip (see: ifconfig)
-udp_dest_device eth1
+udp_dest_device eth2
 
 # Destination port on eth2 (you choose)
 udp_dst_port 60000
@@ -49,34 +49,37 @@ udp_src_port 60002
 
 # Roach2 MAC address (hard coded in Roach2)
 udp_src_mac 02440102110E
+#2020603244
+#024402020B03
 
 # UDP destination MAC address (you choose)
-udp_dest_mac 803F5D096B1D 
+udp_dest_mac 00133B1010A0
+#681CA2123652 
 
 ROACH PARAMS
 
 # A list of baseband frequencies 
-freq_list 250um_array.npy
+freq_list CD044_devA_mirror.npy
 
 # LO step size to be used during VNA/TARG sweeps, Hz
-lo_step 1.0e3
-
-#span of target scan
-targ_span 500e3
+lo_step 0.75e3 #100.0e3
 
 # LO center frequency, MHz
-center_freq 828.0
+center_freq 318.0
 
 COMB PARAMS
 
 # Number of frequencies in test comb
 Nfreq 1000
 
-#Number of averages
-Navg 348
+# Number of averages?
+Navg 11  #171 #342
 
 # Maximum positive frequency, Hz
 max_pos_freq 246.001234e6
+
+# Target span
+targ_span 100.e3
 
 # Minimum positive frequency, Hz
 min_pos_freq 1.02342e6
@@ -91,7 +94,7 @@ min_neg_freq -246.001234e6
 symm_offset 250.0e3
 
 # A single test frequency, Hz
-test_freq 10.0125e6
+test_freq -77.6e6 #10.0125e6
 
 RESONANCE_FINDING PARAMS
 
@@ -99,7 +102,7 @@ RESONANCE_FINDING PARAMS
 smoothing_scale 5.0e6
 
 # Amplitude cutoff threshold, dB (e.g., search points <= -6 dB)
-peak_threshold 6
+peak_threshold 4
 
 # Frequency spacing threshold, kHz (if two resonances spaced by <= this amount, 
 # choose the deeper one
