@@ -3,7 +3,7 @@ import sys, os
 import matplotlib.pyplot as plt
 from scipy import signal, ndimage, fftpack
 
-class interactive_plot(object):
+class interactive_plot(object): # will eventually be deleted saved in case of problems
 
     def __init__(self):
 	self.fig = plt.figure(4,figsize = (16,6))
@@ -50,6 +50,121 @@ class interactive_plot(object):
                 print "please hold either the shift or control key while right clicking to add or remove points"
 
 
+class interactive_plot_2(object):
+
+    def __init__(self,chan_freqs,data,kid_idx):
+        self.chan_freqs = chan_freqs
+        self.data = data
+        self.kid_idx = kid_idx
+        self.kid_idx_len = len(kid_idx)
+        self.fig = plt.figure(4,figsize = (16,6))
+        self.ax = self.fig.add_subplot(111)
+        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+        self.fig.canvas.mpl_connect('key_release_event', self.on_key_release)
+        self.fig.canvas.mpl_connect('button_press_event', self.onClick)
+        self.l1, = self.ax.plot(self.chan_freqs,self.data)
+        self.p1, = self.ax.plot(self.chan_freqs[self.kid_idx],self.data[self.kid_idx],"r*",markersize = 8)
+        self.text_dict = {}
+        for i in range(0,len(self.kid_idx)):
+            self.text_dict[i] = plt.text(self.chan_freqs[self.kid_idx][i], self.data[self.kid_idx][i], str(i))
+            
+        self.shift_is_held = False
+        self.control_is_held = False
+        self.add_list = []
+        self.delete_list = []
+        print "please hold either the shift or control key while right clicking to add or remove points"
+        print "close all plots when finished"
+        plt.xlabel('frequency (MHz)')
+        plt.ylabel('dB')
+        plt.show(block = True)
+        
+    def on_key_press(self, event):
+        #print event.key
+	#has to be shift and ctrl because remote viewers only forward
+	#certain key combinations
+	#print event.key == 'd'
+        if event.key == 'shift':
+           self.shift_is_held = True
+        if event.key == 'control':
+           self.control_is_held = True
+
+    def on_key_release(self, event):
+       if event.key == 'shift':
+           self.shift_is_held = False
+       if event.key == 'control':
+           self.control_is_held = False
+
+    def onClick(self, event):
+        if event.button == 3:
+            if self.shift_is_held: # add point
+                print "adding point", event.xdata
+                self.kid_idx = np.hstack((self.kid_idx,np.argmin(np.abs(self.chan_freqs-event.xdata))))
+                self.kid_idx = self.kid_idx[np.argsort(self.kid_idx)]
+                self.refresh_plot()
+            elif self.control_is_held: #delete point
+                print "removing point", event.xdata
+    	        delete_index = np.argmin(np.abs(self.chan_freqs[self.kid_idx]-event.xdata))
+                self.kid_idx = np.delete(self.kid_idx,delete_index)
+                self.refresh_plot()
+                #self.delete_list.append(event.xdata)
+                #plt.plot(event.xdata,event.ydata,"x",markersize = 20,mew = 5)
+            else:
+                print "please hold either the shift or control key while right clicking to add or remove points"
+
+    def refresh_plot(self):
+        self.p1.set_data(self.chan_freqs[self.kid_idx],self.data[self.kid_idx])
+        for i in range(0,self.kid_idx_len):
+            self.text_dict[i].set_text("")# clear all of the texts
+        self.text_dict = {}
+        for i in range(0,len(self.kid_idx)):
+            self.text_dict[i] = plt.text(self.chan_freqs[self.kid_idx][i], self.data[self.kid_idx][i], str(i))
+        self.kid_idx_len = len(self.kid_idx)
+        plt.draw()
+
+
+class interactive_threshold_plot(object):
+
+    def __init__(self,chan_freqs,data,peak_threshold):
+        self.peak_threshold = peak_threshold
+        self.chan_freqs = chan_freqs
+        self.data = data
+        self.fig = plt.figure(2,figsize = (16,6))
+        self.ax = self.fig.add_subplot(111)
+        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+        self.l1, = self.ax.plot(self.chan_freqs,self.data)
+        self.ilo = np.where( self.data < -1.0*self.peak_threshold)[0]     
+        self.p1, = self.ax.plot(self.chan_freqs[self.ilo],self.data[self.ilo],"r*")            
+        print "Press up or down to change the threshold by 0.1 dB or press t to enter a custom threshold value."
+        print "Close all plots when finished"
+        plt.xlabel('frequency (MHz)')
+        plt.ylabel('dB')
+        self.ax.set_title("Peak Threshold "+str(self.peak_threshold))
+        plt.show(block = True)
+        
+    def on_key_press(self, event):
+        #print event.key
+	#has to be shift and ctrl because remote viewers only forward
+	#certain key combinations
+	#print event.key == 'd'
+        if event.key == 'up':
+           self.peak_threshold = self.peak_threshold +0.1
+           self.refresh_plot()
+        if event.key == 'down':
+           self.peak_threshold = self.peak_threshold - 0.1
+           self.refresh_plot()
+        if event.key == 't':
+           self.peak_threshold = np.float(input("What threshold would you like in dB? "))
+           self.refresh_plot()
+
+
+    def refresh_plot(self):
+        self.ilo = np.where( self.data < -1.0*self.peak_threshold)[0] 
+        self.p1.set_data(self.chan_freqs[self.ilo],self.data[self.ilo])
+        self.ax.set_title("Peak Threshold "+str(self.peak_threshold))
+        plt.draw()
+
+
+                
 #bb_freqs = np.load(os.path.join(path,'bb_freqs.npy'))
 #lo_freqs = np.load(os.path.join(path,'sweep_freqs.npy'))
 accum_len = 2**19
@@ -171,12 +286,14 @@ def main(path, center_freq, sweep_step, smoothing_scale, peak_threshold, spacing
     plt.ylabel('dB')
     plt.legend()
     
-    plt.figure(2)
+    #plt.figure(2)
     #plt.clf()
-    plt.plot(chan_freqs,mags-filtermags,'b')
+    #plt.plot(chan_freqs,mags-filtermags,'b')
+    ipt = interactive_threshold_plot(chan_freqs,(mags-filtermags),peak_threshold)
+    peak_threshold = ipt.peak_threshold
     ilo = np.where( (mags-filtermags) < -1.0*peak_threshold)[0]
-    plt.plot(chan_freqs[ilo],mags[ilo]-filtermags[ilo],'r*')
-    plt.xlabel('frequency (MHz)')
+    #plt.plot(chan_freqs[ilo],mags[ilo]-filtermags[ilo],'r*')
+    #plt.xlabel('frequency (MHz)')
     
     iup = np.where( (mags-filtermags) > -1.0*peak_threshold)[0]
     new_mags = mags - filtermags
@@ -224,18 +341,18 @@ def main(path, center_freq, sweep_step, smoothing_scale, peak_threshold, spacing
     #ax = fig.add_subplot(111)
     # Changed this part up to be an interactive plot that lets you
     # delete and add resonators	
-    ip = interactive_plot()
-    plt.plot(chan_freqs, mags-filtermags,'b')
-    plt.plot(chan_freqs[kid_idx], (mags-filtermags)[kid_idx], 'r*')
+    ip = interactive_plot_2(chan_freqs,(mags-filtermags),kid_idx)
+    #plt.plot(chan_freqs, mags-filtermags,'b')
+    #plt.plot(chan_freqs[kid_idx], (mags-filtermags)[kid_idx], 'r*')
     print len(kid_idx)
-    for i in range(0,len(kid_idx)):
-    	plt.text(chan_freqs[kid_idx][i], (mags-filtermags)[kid_idx][i], str(i))
-    plt.xlabel('frequency (MHz)')
-    plt.ylabel('dB')
-    plt.show(block = True)
+    #for i in range(0,len(kid_idx)):
+    #	plt.text(chan_freqs[kid_idx][i], (mags-filtermags)[kid_idx][i], str(i))
     # list of kid frequencies
-    print "remove list", ip.delete_list
-    print "add list", ip.add_list
+    #print "remove list", ip.delete_list
+    #print "add list", ip.add_list
+    kid_idx = ip.kid_idx
+    
+    '''
     # delete the manualy deleted reesonators
     delete_index = []
     for i in range(0,len(ip.delete_list)):
@@ -250,6 +367,7 @@ def main(path, center_freq, sweep_step, smoothing_scale, peak_threshold, spacing
     if len(add_index)>0:
     	kid_idx = np.hstack((kid_idx,add_index))
     kid_idx = kid_idx[np.argsort(kid_idx)]
+    '''
     #print kid_idx
     plt.figure(5,figsize = (16,6))
     plt.plot(chan_freqs, mags-filtermags,'b')
