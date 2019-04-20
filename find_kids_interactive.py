@@ -53,9 +53,13 @@ class interactive_plot(object): # will eventually be deleted saved in case of pr
 class interactive_plot_2(object):
 
     def __init__(self,chan_freqs,data,kid_idx):
+	plt.rcParams['keymap.forward'] = ['v']
+	plt.rcParams['keymap.back'] = ['c','backspace']# remove arrows from back and forward on plot
         self.chan_freqs = chan_freqs
         self.data = data
         self.kid_idx = kid_idx
+	self.lim_shift_factor = 0.1
+	self.zoom_factor = 0.1 #no greater than 0.5
         self.kid_idx_len = len(kid_idx)
         self.fig = plt.figure(4,figsize = (16,6))
         self.ax = self.fig.add_subplot(111)
@@ -72,8 +76,10 @@ class interactive_plot_2(object):
         self.control_is_held = False
         self.add_list = []
         self.delete_list = []
-        print "please hold either the shift or control key while right clicking to add or remove points"
-        print "close all plots when finished"
+        print("please hold either the shift or control key \n while right clicking to add or remove points")
+        print("You can use the arrow keys to pan around")
+	print("You can use z and x keys to zoom in and out")
+        print("close all plots when finished")
         plt.xlabel('frequency (MHz)')
         plt.ylabel('dB')
         plt.show(block = True)
@@ -85,8 +91,52 @@ class interactive_plot_2(object):
 	#print event.key == 'd'
         if event.key == 'shift':
            self.shift_is_held = True
+
         if event.key == 'control':
            self.control_is_held = True
+
+        if event.key == 'right': #pan right
+		xlim_left, xlim_right = self.ax.get_xlim() 
+		xlim_size = xlim_right-xlim_left
+		self.ax.set_xlim(xlim_left+self.lim_shift_factor*xlim_size,xlim_right+self.lim_shift_factor*xlim_size)
+		plt.draw()       
+
+        if event.key == 'left': #pan left
+		xlim_left, xlim_right = self.ax.get_xlim() 
+		xlim_size = xlim_right-xlim_left
+		self.ax.set_xlim(xlim_left-self.lim_shift_factor*xlim_size,xlim_right-self.lim_shift_factor*xlim_size)
+		plt.draw()
+
+        if event.key == 'up': #pan up
+		ylim_left, ylim_right = self.ax.get_ylim() 
+		ylim_size = ylim_right-ylim_left
+		self.ax.set_ylim(ylim_left+self.lim_shift_factor*ylim_size,ylim_right+self.lim_shift_factor*ylim_size)
+		plt.draw()       
+
+        if event.key == 'down': #pan down
+		ylim_left, ylim_right = self.ax.get_ylim() 
+		ylim_size = ylim_right-ylim_left
+		self.ax.set_ylim(ylim_left-self.lim_shift_factor*ylim_size,ylim_right-self.lim_shift_factor*ylim_size)
+		plt.draw()
+
+        if event.key == 'z': #zoom in
+		xlim_left, xlim_right = self.ax.get_xlim() 
+		ylim_left, ylim_right = self.ax.get_ylim() 
+		xlim_size = xlim_right-xlim_left
+		ylim_size = ylim_right-ylim_left
+		self.ax.set_xlim(xlim_left+self.zoom_factor*xlim_size,xlim_right-self.zoom_factor*xlim_size)
+		self.ax.set_ylim(ylim_left+self.zoom_factor*ylim_size,ylim_right-self.zoom_factor*ylim_size)
+		plt.draw() 
+
+        if event.key == 'x': #zoom out
+		xlim_left, xlim_right = self.ax.get_xlim() 
+		ylim_left, ylim_right = self.ax.get_ylim() 
+		xlim_size = xlim_right-xlim_left
+		ylim_size = ylim_right-ylim_left
+		self.ax.set_xlim(xlim_left-self.zoom_factor*xlim_size,xlim_right+self.zoom_factor*xlim_size)
+		self.ax.set_ylim(ylim_left-self.zoom_factor*ylim_size,ylim_right+self.zoom_factor*ylim_size)
+		plt.draw()
+
 
     def on_key_release(self, event):
        if event.key == 'shift':
