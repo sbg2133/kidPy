@@ -59,7 +59,7 @@ class roachInterface(object):
 	self.LUTbuffer_len = 2**21
         self.dac_freq_res = 2*self.dac_samp_freq/self.LUTbuffer_len
         self.fft_len = 1024
-        self.accum_len = 2**19 
+        self.accum_len = 2**19
         self.accum_freq = self.fpga_samp_freq / self.accum_len
 	self.I_dds = np.zeros(self.LUTbuffer_len)
 	self.freq_comb = []

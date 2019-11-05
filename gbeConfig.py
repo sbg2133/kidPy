@@ -526,7 +526,7 @@ class roachDownlink(object):
         fo_time.close()
         fo_count.close()
         d.close()
-        return
+        return filename
 
 
     def saveDirfile_chanRangeIQ(self, time_interval, stage_coords = False, **keywords):
@@ -585,5 +585,5 @@ class roachDownlink(object):
             pool.close()
             pool.join()
 
-        return
+        return filename
 
