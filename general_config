@@ -107,3 +107,9 @@ peak_threshold 4
 # Frequency spacing threshold, kHz (if two resonances spaced by <= this amount, 
 # choose the deeper one
 spacing_threshold 20.
+
+# Attenuator Type
+attenuator_type lab_brick
+
+# Attenuator Address
+attenuator_address 01784

@@ -19,6 +19,7 @@ import sys, os
 import struct
 import casperfpga
 #import valon_synth9_wind as valon_synth9
+#import valon_synth9_an as valon_synth9
 import valon_synth9
 from socket import *
 from roachInterface import roachInterface
@@ -29,6 +30,7 @@ from scipy import signal, ndimage, fftpack
 import find_kids_interactive as fk
 import pygetdata as gd
 import targplot
+import attenuator
 plt.ion()
 
 
@@ -68,6 +70,10 @@ freq_list = gc[np.where(gc == 'freq_list')[0][0]][1]
 smoothing_scale = np.float(gc[np.where(gc == 'smoothing_scale')[0][0]][1])
 peak_threshold = np.float(gc[np.where(gc == 'peak_threshold')[0][0]][1])
 spacing_threshold  = np.float(gc[np.where(gc == 'spacing_threshold')[0][0]][1])
+
+# Attenuator vals
+atten_type = gc[np.where(gc == 'attenuator_type')[0][0]][1]
+atten_address = gc[np.where(gc == 'attenuator_address')[0][0]][1]
 
 def systemInit():
     fpga = getFPGA
@@ -269,6 +275,7 @@ main_opts= ['Test connection to ROACH',\
             'Plot channel phase PSD (quick look)',\
             'Save dirfile for range of chan',\
 	    'Execute a script',\
+        'Change input attenuation',\
             'Exit']
 #########################################################################
 
@@ -438,7 +445,7 @@ def targetSweep(ri, udp, valon,**keywords):
     start = center_freq*1.0e6 - (span/2.)
     stop = center_freq*1.0e6 + (span/2.) 
     sweep_freqs = np.arange(start, stop, lo_step_targ)
-    sweep_freqs = np.round(sweep_freqs/lo_step_targ)*lo_step_targ
+    #sweep_freqs = np.round(sweep_freqs/lo_step_targ)*lo_step_targ
     np.save(sweep_dir + '/bb_freqs.npy', target_freqs)
     np.save(sweep_dir + '/sweep_freqs.npy',sweep_freqs)
     first = True
@@ -489,7 +496,7 @@ def plotVNASweep(path):
     plt.xlabel('frequency (MHz)', size = 16)
     plt.ylabel('dB', size = 16)
     plt.grid()
-    plt.tight_layout()
+    #plt.tight_layout()
     plt.savefig(os.path.join(path,'vna_sweep.png'), dpi = 100, bbox_inches = 'tight')
     return
 """
@@ -921,7 +928,7 @@ def menu(captions, options):
     opt = input()
     return opt
 
-def main_opt(fpga, ri, udp, valon, upload_status):
+def main_opt(fpga, ri, udp, valon, upload_status, atten=None):
     """Creates terminal interface
        inputs:
            casperfpga object fpga
@@ -1142,6 +1149,19 @@ def main_opt(fpga, ri, udp, valon, upload_status):
             except KeyboardInterrupt:
                 pass
         if opt == 17:
+            if atten is None:
+                print('No input attenuator found')
+            else:
+                print('Current Attenuation: {0}'.format(atten.get_atten()))
+                prompt = raw_input('What should the new setting be? ')
+                not_set = True
+                while not_set: 
+                    try:
+                        atten.set_atten(float(prompt))
+                        not_set = False
+                    except ValueError:
+                        prompt = raw_input('Didn\'t catch that, let\'s try again: ')
+        if opt == 18:
             sys.exit()
         return upload_status
 
@@ -1222,6 +1242,11 @@ def main():
     # GbE interface
     udp = roachDownlink(ri, fpga, gc, regs, s, ri.accum_freq)
     udp.configSocket()
+
+    # Input Attenuator
+    atten = attenuator.Attenuator(atten_type, atten_address)
+#    atten = None
+
     os.system('clear')
     while 1:
         try:
@@ -1231,7 +1256,7 @@ def main():
                     #firmware_info = fpga.get_config_file_info()
                     upload_status = 1
             time.sleep(0.1)
-            upload_status = main_opt(fpga, ri, udp, valon, upload_status)
+            upload_status = main_opt(fpga, ri, udp, valon, upload_status, atten)
         except TypeError:
             pass
     return 
