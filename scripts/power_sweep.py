@@ -16,16 +16,21 @@ from lab_brick import core #this module can be found https://github.com/GlennGro
 power_sweep_dir = "../../data/kidpy_multitone/power_sweeps/"
 
 #you will need to edit the last number below to be the serial number of your lab brick
-attn = core.Attenuator(0x041f,0x1208,"01784")
-max_attn = 32.
-min_attn = 4.
-attn_step = 2.
+if atten is None:
+    attn = core.Attenuator(0x041f,0x1208,"01784")
+    disconnect = True
+else:
+    attn = atten.instr
+    disconnect = False
+max_attn = 25.
+min_attn = 10.
+attn_step = 2.5
 n_attn_levels = np.int((max_attn-min_attn)/attn_step)+1
 
 attn_levels = np.linspace(max_attn,min_attn,n_attn_levels)
 
-fine_step = 0.5e3
-fine_span = 50*1e3
+fine_step = 1e3
+fine_span = 250e3
 gain_span = 2.0e6
 gain_step = gain_span/50.
 
@@ -47,7 +52,8 @@ for i in range(0,n_attn_levels):
 	if analyze_on_the_go: #analyze on the fly to make things faster
 		p = subprocess.Popen([sys.executable, './scripts/analyze_fine_gain.py',str(fine_name),str(gain_name)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	
-attn.connected = False
+if disconnect:
+    attn.connected = False
 time_str = str(datetime.now())[0:10]+str(datetime.now())[11:19]
 np.save(power_sweep_dir+ time_str+"_fine_names",fine_names)
 np.save(power_sweep_dir+ time_str+"_gain_names",gain_names)

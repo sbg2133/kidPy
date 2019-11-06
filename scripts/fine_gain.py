@@ -8,14 +8,18 @@ fit_scans = True
 
 print("Running fine scan and gain scan combo")
 
+gain_span = 1.0e6 #1e6
+gain_pts = 50
+fine_span = 1.0e5 #7.5e4
+fine_pts = 100 #75
 #gain scan 
 #run gain scan first so you don't acidentially recenter
 #on the gain scan afterwords instead of the fine scan
-targetSweep(ri, udp, valon,span = 2.0e6,lo_step = 2.0e6/50.)
+targetSweep(ri, udp, valon,span = gain_span,lo_step = gain_span/gain_pts)
 gain_name = str(np.load("last_targ_dir.npy"))
 #plotTargSweep(gain_name)
 #fine scan
-targetSweep(ri, udp, valon,span = (50.*1000),lo_step = 0.5e3)
+targetSweep(ri, udp, valon,span = fine_span,lo_step = fine_span/fine_pts)
 fine_name = str(np.load("last_targ_dir.npy"))
 #plotTargSweep(fine_name)
 
